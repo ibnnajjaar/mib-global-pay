@@ -16,7 +16,6 @@ abstract class Request
         if (!isset($this->method) || !in_array($this->method, ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])) {
             throw new LogicException('Your request is missing a HTTP method. You must add a method property like [protected string $method = "GET"]');
         }
-
         return $this->method;
     }
 

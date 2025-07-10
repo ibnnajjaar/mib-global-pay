@@ -96,19 +96,15 @@ class OrderData
             throw new \InvalidArgumentException('Amount must be numeric');
         }
 
-        $floatAmount = (float) $amount;
-
-        if ($floatAmount <= 0) {
+        $float_amount = (float) $amount;
+        if ($float_amount <= 0) {
             throw new \InvalidArgumentException('Amount must be greater than 0');
         }
 
-        // Convert to string to check decimal places accurately
-        $amountStr = rtrim(rtrim((string) $amount, '0'), '.');
-
-        // Check for decimal places
-        if (strpos($amountStr, '.') !== false) {
-            $decimalPart = substr($amountStr, strpos($amountStr, '.') + 1);
-            if (strlen($decimalPart) > 2) {
+        $amount_str = rtrim(rtrim((string) $amount, '0'), '.');
+        if (strpos($amount_str, '.') !== false) {
+            $decimal_part = substr($amount_str, strpos($amount_str, '.') + 1);
+            if (strlen($decimal_part) > 2) {
                 throw new \InvalidArgumentException('Amount cannot have more than 2 decimal places');
             }
         }
@@ -127,8 +123,8 @@ class OrderData
             throw new \InvalidArgumentException('Currency is required');
         }
 
-        $validCurrencies = array('USD', 'MVR');
-        if (!in_array(strtoupper($currency), $validCurrencies)) {
+        $valid_currencies = array('USD', 'MVR');
+        if (!in_array(strtoupper($currency), $valid_currencies)) {
             throw new \InvalidArgumentException('Invalid currency code');
         }
 

@@ -25,7 +25,6 @@ class MIBGlobalPayConnector extends Connector
         string $api_password
     ) {
         $this->validateCredentials($merchant_portal_url, $merchant_id, $api_password);
-
         $this->merchant_portal_url = $merchant_portal_url;
         $this->merchant_id = $merchant_id;
         $this->api_password = $api_password;
@@ -67,24 +66,19 @@ class MIBGlobalPayConnector extends Connector
         if (empty($merchant_portal_url) || empty($merchant_id) || empty($api_password)) {
             throw new \InvalidArgumentException('Merchant portal URL, ID, and API password are required.');
         }
-
-        // Clean up URL - remove protocol if present for validation
         $clean_url = preg_replace('/^https?:\/\//', '', $merchant_portal_url);
-
         if (!filter_var('https://' . $clean_url, FILTER_VALIDATE_URL)) {
             throw new \InvalidArgumentException('Invalid merchant portal URL.');
         }
-
-        // Store clean URL without protocol
         $this->merchant_portal_url = $clean_url;
     }
 
     /**
      * @throws MIBGlobalPayException
      */
-    public function createTransaction($orderData): Response
+    public function createTransaction($order_data): Response
     {
-        $order = $this->normalizeOrderData($orderData);
+        $order = $this->normalizeOrderData($order_data);
         return $this->send(new CreateTransactionRequest($order));
     }
 
@@ -92,20 +86,17 @@ class MIBGlobalPayConnector extends Connector
      * Retrieve payment status by order reference
      * @throws MIBGlobalPayException
      */
-    public function getTransactionStatus(string $orderReference): Response
+    public function getTransactionStatus(string $order_reference): Response
     {
-        return $this->send(new GetTransactionRequest($orderReference));
+        return $this->send(new GetTransactionRequest($order_reference));
     }
 
-    /**
-     * Normalize order data to OrderData object
-     */
-    private function normalizeOrderData($orderData): OrderData
+    private function normalizeOrderData($order_data): OrderData
     {
-        if (is_array($orderData)) {
-            return OrderData::fromArray($orderData);
-        } elseif ($orderData instanceof OrderData) {
-            return $orderData;
+        if (is_array($order_data)) {
+            return OrderData::fromArray($order_data);
+        } elseif ($order_data instanceof OrderData) {
+            return $order_data;
         } else {
             throw new \InvalidArgumentException('Order data must be an array or OrderData instance');
         }

@@ -7,15 +7,15 @@ use IbnNajjaar\MIBGlobalPay\Support\Request;
 class GetTransactionRequest extends Request
 {
     protected $method = 'GET';
-    private $orderReference;
+    private $order_reference;
 
-    public function __construct(string $orderReference)
+    public function __construct(string $order_reference)
     {
-        $this->orderReference = $orderReference;
+        $this->order_reference = $order_reference;
     }
 
     public function resolveEndpoint(): string
     {
-        return "order/{$this->orderReference}";
+        return "order/{$this->order_reference}";
     }
 }

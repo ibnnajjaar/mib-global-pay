@@ -10,7 +10,7 @@ class Response
 {
     /* @var ResponseInterface $response */
     protected $response;
-    protected $decodedData = null;
+    protected $decoded_data = null;
 
     public function __construct(ResponseInterface $response)
     {
@@ -34,11 +34,11 @@ class Response
 
     public function json(): array
     {
-        if ($this->decodedData === null) {
-            $this->decodedData = json_decode($this->getBody(), true) ?? [];
+        if ($this->decoded_data === null) {
+            $this->decoded_data = json_decode($this->getBody(), true) ?? [];
         }
 
-        return $this->decodedData;
+        return $this->decoded_data;
     }
 
     public function isSuccessful(): bool

@@ -9,7 +9,6 @@ class CreateTransactionRequest extends Request
 {
     protected $method = 'POST';
 
-    /* @var OrderData $order */
     private $order;
 
     public function __construct(OrderData $order)

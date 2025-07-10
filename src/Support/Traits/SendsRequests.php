@@ -45,17 +45,17 @@ trait SendsRequests
 
             return new Response($response);
 
-        } catch (RequestException $e) {
+        } catch (RequestException $exception) {
             throw new MIBGlobalPayException(
-                'HTTP request failed: ' . $e->getMessage(),
-                $e->getCode(),
-                $e
+                'HTTP request failed: ' . $exception->getMessage(),
+                $exception->getCode(),
+                $exception
             );
-        } catch (\Exception $e) {
+        } catch (\Exception $exception) {
             throw new MIBGlobalPayException(
-                'Request failed: ' . $e->getMessage(),
+                'Request failed: ' . $exception->getMessage(),
                 0,
-                $e
+                $exception
             );
         }
     }
