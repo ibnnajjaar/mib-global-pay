@@ -287,6 +287,11 @@ Use test card numbers provided by the bank.  Test cards will be listed in the do
 ```bash
 composer test
 ```
+When using docker, you can run the tests using:
+
+```bash
+docker-compose run --rm php vendor/bin/phpunit
+```
 
 ## Roadmap
 
