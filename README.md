@@ -47,9 +47,9 @@ $api_password = 'your-sandbox-api-password';
 Initialize the client:
 
 ```php
-use IbnNajjaar\MIBGlobalPay\Client;
+use IbnNajjaar\MIBGlobalPay\MIBGlobalPayConnector;
 
-$client = new Client($merchant_portal_url, $merchant_id, $api_password);
+$client = new MIBGlobalPayConnector($merchant_portal_url, $merchant_id, $api_password);
 ```
 
 ### Environment Variables (Recommended)
@@ -63,7 +63,7 @@ MIB_MERCHANT_ID=your_merchant_id
 MIB_API_PASSWORD=your_api_password
 
 // In your code
-$client = new Client(
+$connector = new MIBGlobalPayConnector(
     $_ENV['MIB_MERCHANT_URL'],
     $_ENV['MIB_MERCHANT_ID'],
     $_ENV['MIB_API_PASSWORD']
@@ -91,7 +91,7 @@ $payment_details = OrderData::fromArray([
 ]);
 
 try {
-    $response = $client->transactions->create($payment_details->toArray());
+    $response = $connector->createTransaction($payment_details->toArray());
     $response_data = json_decode($response->getBody()->getContents(), true);
 
     $session_id = $response_data['session']['id'] ?? null;
@@ -175,7 +175,7 @@ To double-check the status of a payment via API:
 $order_reference = 'order_12345'; // Use the order ID you saved earlier
 
 try {
-    $response = $client->transactions->get($order_reference);
+    $response = $connector->getTransaction($order_reference);
     $response_data = json_decode($response->getBody()->getContents(), true);
 
 		// You can log the $response_data and use it to determine if
@@ -202,7 +202,7 @@ The SDK may encounter various errors during API calls. Always implement proper e
 ```php
 try {
 
-    $response = $client->transactions->create($payment_details->toArray());
+    $response = $connector->createTransaction($payment_details->toArray());
     $response_data = json_decode($response->getBody()->getContents(), true);
     
 } catch (Exception $e) {
@@ -220,9 +220,9 @@ try {
 
 ```php
 [
-		'checkoutMode' => 'WEBSITE',
-		'merchant' => 'YOURMERCHANTID',
-		'result' => 'SUCCESS',
+    'checkoutMode' => 'WEBSITE',
+    'merchant' => 'YOURMERCHANTID',
+    'result' => 'SUCCESS',
     'session' => [
         'id' => 'SESSION_abc123', // session id
         'udpateStatus' => 'SUCCESS',

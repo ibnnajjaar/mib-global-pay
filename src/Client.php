@@ -3,7 +3,7 @@
 namespace IbnNajjaar\MIBGlobalPay;
 
 use GuzzleHttp\Client as GuzzleClient;
-class Client
+class MIBGlobalPayConnector
 {
     private $merchant_portal_url;
     private $merchant_id;
