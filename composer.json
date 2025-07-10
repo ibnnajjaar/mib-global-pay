@@ -1,0 +1,50 @@
+{
+    "name": "ibnnajjaar/mib-global-pay",
+    "description": "Framework-agnostic MIB Global integration in PHP",
+    "keywords": [
+        "ibnnajjaar",
+        "mib-global-pay",
+        "maldives islamic bank",
+        "maldives",
+        "bank"
+    ],
+    "homepage": "https://github.com/ibnnajjaar/mib-global-pay",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Hussain Afeef",
+            "email": "ibnahnajjaar@gmail.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^7.2",
+        "guzzlehttp/guzzle": "~6.0|~7.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^8.5.42"
+    },
+    "autoload": {
+        "psr-4": {
+            "IbnNajjaar\\MIBGlobalPay\\": "src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "IbnNajjaar\\MIBGlobalPay\\Tests\\": "tests"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit",
+        "test-coverage": "vendor/bin/phpunit --coverage",
+        "format": "vendor/bin/pint"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "phpstan/extension-installer": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

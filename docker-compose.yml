@@ -1,0 +1,6 @@
+services:
+    php:
+        build: .
+        platform: linux/amd64  # Optional for Mac M1/M2 compatibility
+        volumes:
+            - .:/app
