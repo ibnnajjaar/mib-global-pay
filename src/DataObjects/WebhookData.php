@@ -7,6 +7,11 @@ use IbnNajjaar\MIBGlobalPay\Support\IsResponseData;
 class WebhookData implements IsResponseData
 {
     /**
+     * @var string|null
+     */
+    private $order_reference;
+
+    /**
      * @var float|null
      */
     private $order_amount;
@@ -19,54 +24,42 @@ class WebhookData implements IsResponseData
     /**
      * @var string|null
      */
-    private $order_reference;
-
-    /*
-     * @var string|null
-     * */
     private $status;
 
-    private $notification_host;
+    /**
+     * @var string|null
+     */
     private $notification_secret;
 
+    /**
+     * @var array|null
+     */
     private $raw_response;
 
     public function __construct(
-        ?string $order_reference,
-        ?float $order_amount,
-        ?string $status,
-        ?string $order_currency,
-        ?string $notification_secret,
-        ?string $notification_host,
+        ?string $order_reference = null,
+        ?float $order_amount = null,
+        ?string $status = null,
+        ?string $order_currency = null,
+        ?string $notification_secret = null,
         ?array $raw_response = null
-    )
-    {
+    ) {
         $this->order_reference = $order_reference;
         $this->order_amount = $order_amount;
         $this->status = $status;
         $this->order_currency = $order_currency;
         $this->notification_secret = $notification_secret;
-        $this->notification_host = $notification_host;
         $this->raw_response = $raw_response;
     }
 
-    /**
-     * @param array $response
-     * @return self
-     * @throws \InvalidArgumentException
-     */
-    public static function fromArray(
-        array $response,
-        array $headers = []
-    ): IsResponseData
+    public static function fromArray(array $response, array $headers = []): IsResponseData
     {
         return new self(
             $response['order']['id'] ?? null,
-            $response['order']['amount'] ?? null,
+            isset($response['order']['amount']) ? (float) $response['order']['amount'] : null,
             $response['order']['status'] ?? null,
             $response['order']['currency'] ?? null,
             $headers['x-notification-secret'][0] ?? null,
-            $headers['host'][0] ?? null,
             $response
         );
     }
@@ -78,11 +71,7 @@ class WebhookData implements IsResponseData
 
     public function getOrderAmount(): ?float
     {
-        if ($this->order_amount === null) {
-            return null;
-        }
-
-        return (float) $this->order_amount;
+        return $this->order_amount;
     }
 
     public function getOrderCurrency(): ?string
@@ -92,7 +81,7 @@ class WebhookData implements IsResponseData
 
     public function getStatus(): ?string
     {
-        return $this->status;
+        return strtolower($this->status);
     }
 
     public function getNotificationSecret(): ?string
@@ -100,16 +89,13 @@ class WebhookData implements IsResponseData
         return $this->notification_secret;
     }
 
-    public function getNotificationHost(): ?string
-    {
-        return $this->notification_host;
-    }
-
-    /**
-     * @return array|null
-     */
     public function getRawResponse(): ?array
     {
         return $this->raw_response;
+    }
+
+    public function paymentIsSuccessful(): bool
+    {
+        return $this->getStatus() === 'captured';
     }
 }
