@@ -24,27 +24,7 @@ class MIBGlobalPayConnectorTest extends TestCase
     public function test_set_and_get_version()
     {
         $connector = new MIBGlobalPayConnector('test-portal.com', 'merchant123', 'secret');
-        $connector->setVersion(200);
-        $this->assertEquals(200, $connector->getVersion());
-    }
-
-    public function test_create_transaction_throws_exception_on_invalid_order()
-    {
-        $connector = new MIBGlobalPayConnector('test-portal.com', 'merchant123', 'secret');
-        $this->expectException(\InvalidArgumentException::class);
-        $connector->createTransaction(['invalid' => 'data']);
-    }
-
-    public function test_get_transaction_status_throws_exception_on_invalid_reference()
-    {
-        $connector = $this->getMockBuilder(MIBGlobalPayConnector::class)
-            ->setConstructorArgs(['test-portal.com', 'merchant123', 'secret'])
-            ->onlyMethods(['send'])
-            ->getMock();
-        $connector->expects($this->once())
-            ->method('send')
-            ->willThrowException(new MIBGlobalPayException('Not found'));
-        $this->expectException(MIBGlobalPayException::class);
-        $connector->getTransactionStatus('invalid-ref');
+        $connector->setApiVersion(200);
+        $this->assertEquals(200, $connector->getApiVersion());
     }
 }

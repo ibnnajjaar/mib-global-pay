@@ -8,6 +8,7 @@ use IbnNajjaar\MIBGlobalPay\Support\Connector;
 use IbnNajjaar\MIBGlobalPay\Support\Response;
 use IbnNajjaar\MIBGlobalPay\Support\Request;
 use IbnNajjaar\MIBGlobalPay\DataObjects\OrderData;
+use IbnNajjaar\MIBGlobalPay\DataObjects\BaseOrderData;
 use IbnNajjaar\MIBGlobalPay\Requests\GetTransactionRequest;
 use IbnNajjaar\MIBGlobalPay\Exceptions\MIBGlobalPayException;
 use IbnNajjaar\MIBGlobalPay\Requests\CreateTransactionRequest;
@@ -53,10 +54,9 @@ class MIBGlobalPayConnector extends Connector
     /**
      * @throws MIBGlobalPayException
      */
-    public function createTransaction($order_data): Response
+    public function createTransaction(BaseOrderData $order_data): Response
     {
-        $order = $this->normalizeOrderData($order_data);
-        return $this->send(new CreateTransactionRequest($order));
+        return $this->send(new CreateTransactionRequest($order_data));
     }
 
     /**
@@ -89,12 +89,12 @@ class MIBGlobalPayConnector extends Connector
         return $this->merchant_id;
     }
 
-    protected function getMerchantPortalUrl(): string
+    public function getMerchantPortalUrl(): string
     {
        return $this->merchant_portal_url;
     }
 
-    protected function getApiVersion(): string
+    public function getApiVersion(): string
     {
         return (string)$this->version;
     }

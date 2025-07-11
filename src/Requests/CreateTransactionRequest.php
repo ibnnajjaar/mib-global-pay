@@ -25,7 +25,7 @@ class CreateTransactionRequest extends Request
         return 'session';
     }
 
-    protected function defaultData(): array
+    public function defaultData(): array
     {
         return [
             'apiOperation' => 'INITIATE_CHECKOUT',

@@ -37,11 +37,6 @@ abstract class Connector
         ];
     }
 
-    protected function defaultQuery(): array
-    {
-        return [];
-    }
-
     protected function getHttpClient(): GuzzleClient
     {
         return new GuzzleClient([
