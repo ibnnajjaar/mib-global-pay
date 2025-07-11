@@ -30,30 +30,7 @@ class MIBGlobalPayConnector extends Connector
         $this->api_password = $api_password;
     }
 
-    public function resolveBaseUrl(): string
-    {
-        return "https://{$this->merchant_portal_url}/api/rest/version/{$this->version}/merchant/{$this->merchant_id}/";
-    }
-
-    protected function defaultHeaders(): array
-    {
-        return [
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json',
-        ];
-    }
-
-    protected function defaultAuth(): array
-    {
-        return ["merchant.{$this->merchant_id}", $this->api_password];
-    }
-
-    public function getVersion(): int
-    {
-        return $this->version;
-    }
-
-    public function setVersion(int $version): void
+    public function setApiVersion(int $version): void
     {
         $this->version = $version;
     }
@@ -100,5 +77,25 @@ class MIBGlobalPayConnector extends Connector
         } else {
             throw new \InvalidArgumentException('Order data must be an array or OrderData instance');
         }
+    }
+
+    protected function getApiPassword(): string
+    {
+        return $this->api_password;
+    }
+
+    protected function getMerchantId(): string
+    {
+        return $this->merchant_id;
+    }
+
+    protected function getMerchantPortalUrl(): string
+    {
+       return $this->merchant_portal_url;
+    }
+
+    protected function getApiVersion(): string
+    {
+        return (string)$this->version;
     }
 }

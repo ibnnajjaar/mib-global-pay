@@ -2,6 +2,7 @@
 
 namespace IbnNajjaar\MIBGlobalPay\Support\Traits;
 
+use GuzzleHttp\Client;
 use IbnNajjaar\MIBGlobalPay\Support\Request;
 use IbnNajjaar\MIBGlobalPay\Support\Response;
 use GuzzleHttp\Exception\RequestException;
@@ -43,7 +44,7 @@ trait SendsRequests
 
             $response = $client->$method($endpoint, $options);
 
-            return new Response($response);
+            return new Response($response, $request->getResponseDataClass());
 
         } catch (RequestException $exception) {
             throw new MIBGlobalPayException(

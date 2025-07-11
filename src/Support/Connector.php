@@ -11,16 +11,30 @@ abstract class Connector
 {
     use SendsRequests;
 
-    abstract public function resolveBaseUrl(): string;
+    abstract protected function getApiPassword(): string;
+    abstract protected function getMerchantId(): string;
+    abstract protected function getMerchantPortalUrl(): string;
+    abstract protected function getApiVersion(): string;
+
+    public function resolveBaseUrl(): string
+    {
+        return "https://{$this->getMerchantPortalUrl()}/api/rest/version/{$this->getApiVersion()}/merchant/{$this->getMerchantId()}/";
+    }
 
     protected function defaultHeaders(): array
     {
-        return [];
+        return [
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+        ];
     }
 
     protected function defaultAuth(): array
     {
-        return [];
+        return [
+            'merchant.' . $this->getMerchantId(),
+            $this->getApiPassword(),
+        ];
     }
 
     protected function defaultQuery(): array

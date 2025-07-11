@@ -3,6 +3,7 @@
 namespace IbnNajjaar\MIBGlobalPay\Support;
 
 use LogicException;
+use Psr\Http\Message\ResponseInterface;
 
 abstract class Request
 {
@@ -68,4 +69,7 @@ abstract class Request
     {
         return [];
     }
+
+    abstract public function getResponseDataClass(): ?string;
+
 }

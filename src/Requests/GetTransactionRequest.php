@@ -18,4 +18,9 @@ class GetTransactionRequest extends Request
     {
         return "order/{$this->order_reference}";
     }
+
+    public function getResponseDataClass(): ?string
+    {
+        return null;
+    }
 }

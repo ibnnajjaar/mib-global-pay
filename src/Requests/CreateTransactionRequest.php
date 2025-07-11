@@ -3,17 +3,21 @@
 namespace IbnNajjaar\MIBGlobalPay\Requests;
 
 use IbnNajjaar\MIBGlobalPay\Support\Request;
+use IbnNajjaar\MIBGlobalPay\Support\IsOrderData;
 use IbnNajjaar\MIBGlobalPay\DataObjects\OrderData;
+use IbnNajjaar\MIBGlobalPay\DataObjects\BaseOrderData;
+use IbnNajjaar\MIBGlobalPay\DataObjects\CheckoutSessionData;
 
 class CreateTransactionRequest extends Request
 {
     protected $method = 'POST';
 
-    private $order;
+    /* @var BaseOrderData $order_data */
+    private $order_data;
 
-    public function __construct(OrderData $order)
+    public function __construct(BaseOrderData $order_data)
     {
-        $this->order = $order;
+        $this->order_data = $order_data;
     }
 
     public function resolveEndpoint(): string
@@ -26,14 +30,35 @@ class CreateTransactionRequest extends Request
         return [
             'apiOperation' => 'INITIATE_CHECKOUT',
             'order' => [
-                'id' => $this->order->getOrderId(),
-                'amount' => $this->order->getAmount(),
-                'currency' => $this->order->getCurrency(),
-                'description' => $this->order->getDescription(),
+                'id' => $this->order_data->getOrderId(),
+                'amount' => $this->order_data->getOrderAmount(),
+                'currency' => $this->order_data->getOrderCurrency(),
+                'description' => $this->order_data->getOrderDescription(),
+                'custom' => null,
+                'notificationUrl' => $this->order_data->getWebHookUrl(),
             ],
             'interaction' => [
-                'returnUrl' => $this->order->getReturnUrl(),
+                'operation' => 'PURCHASE',
+                'cancelUrl' => $this->order_data->getCancelUrl(),
+                'merchant' => [
+                    'address' => [
+                        'line1' => $this->order_data->getMerchantAddressLine1(),
+                    ],
+                    'email' => $this->order_data->getMerchantEmail(),
+                    'logo' => $this->order_data->getMerchantLogo(),
+                    'name' => $this->order_data->getMerchantName(),
+                    'phone' => $this->order_data->getMerchantPhone(),
+                    'url' => $this->order_data->getMerchantUrl(),
+                ],
+                'redirectMerchantUrl' => $this->order_data->getRedirectMerchantUrl(),
+                'retryAttemptCount' => $this->order_data->getRetryAttemptCount(),
+                'returnUrl' => $this->order_data->getReturnUrl(),
             ],
         ];
+    }
+
+    public function getResponseDataClass(): ?string
+    {
+        return CheckoutSessionData::class;
     }
 }

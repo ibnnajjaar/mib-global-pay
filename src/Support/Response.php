@@ -10,11 +10,24 @@ class Response
 {
     /* @var ResponseInterface $response */
     protected $response;
+    protected $response_data_class = null;
     protected $decoded_data = null;
 
-    public function __construct(ResponseInterface $response)
+    /**
+     * @throws MIBGlobalPayException
+     */
+    public function __construct(ResponseInterface $response, ?string $response_data_class)
     {
+        if ($response_data_class && !class_exists($response_data_class)) {
+            throw new MIBGlobalPayException("Response data class {$response_data_class} does not exist.");
+        }
+
+        if ($response_data_class && !in_array(IsResponseData::class, class_implements($response_data_class))) {
+            throw new MIBGlobalPayException("Response data class {$response_data_class} must implement " . IsResponseData::class);
+        }
+
         $this->response = $response;
+        $this->response_data_class = $response_data_class;
     }
 
     public function getStatusCode(): int
@@ -32,13 +45,28 @@ class Response
         return $this->response->getBody()->getContents();
     }
 
-    public function json(): array
+    public function toArray(): array
     {
         if ($this->decoded_data === null) {
             $this->decoded_data = json_decode($this->getBody(), true) ?? [];
         }
 
         return $this->decoded_data;
+    }
+
+    /**
+     * Convert response to CheckoutSessionData DTO
+     *
+     * @return IsResponseData
+     * @throws MIBGlobalPayException
+     */
+    public function toDto(): IsResponseData
+    {
+        if ($this->isSuccessful()) {
+            return call_user_func([$this->response_data_class, 'fromArray'], $this->toArray());
+        }
+
+        $this->throw(); // Ensure response is successful
     }
 
     public function isSuccessful(): bool
@@ -57,7 +85,7 @@ class Response
     public function throw(): self
     {
         if ($this->isFailed()) {
-            $data = $this->json();
+            $data = $this->toArray();
             $message = $data['error']['explanation'] ?? 'Request failed';
             throw new MIBGlobalPayException($message, $this->getStatusCode());
         }
