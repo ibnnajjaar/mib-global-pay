@@ -2,6 +2,7 @@
 
 namespace IbnNajjaar\MIBGlobalPay\Tests;
 
+use IbnNajjaar\MIBGlobalPay\Contracts\IsResponseData;
 use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
 use PHPUnit\Framework\TestCase;
 use IbnNajjaar\MIBGlobalPay\Responses\DataObjects\HostedCheckoutReturnData;
@@ -12,6 +13,7 @@ class HostedCheckoutReturnDataTest extends TestCase
     public function test_return_url_response_data_dto_is_valid()
     {
         $hosted_checkout_data = HostedCheckoutReturnData::fromArray($this->getResponseData());
+        $this->assertInstanceOf(IsResponseData::class, $hosted_checkout_data);
         $this->assertEquals($this->getResponseData()['resultIndicator'], $hosted_checkout_data->getResultIndicator());;
     }
 

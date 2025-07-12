@@ -45,6 +45,12 @@ class OrderDataTest extends TestCase
         OrderData::make('ORD789', 100)->setOrderCurrency('XYZ');
     }
 
+    public function test_order_data_implements_is_order_data_interface()
+    {
+        $order_data = new OrderData('ORD123', 100);
+        $this->assertInstanceOf(\IbnNajjaar\MIBGlobalPay\Contracts\IsOrderData::class, $order_data);
+    }
+
     public function test_from_array_with_valid_data()
     {
         $data = [

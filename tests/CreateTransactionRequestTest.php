@@ -6,6 +6,7 @@ namespace IbnNajjaar\MIBGlobalPay\Tests;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use IbnNajjaar\MIBGlobalPay\MIBGlobalPayConnector;
+use IbnNajjaar\MIBGlobalPay\Contracts\IsResponseData;
 use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
 use IbnNajjaar\MIBGlobalPay\Requests\CreateTransactionRequest;
 use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\BaseOrderData;
@@ -92,6 +93,7 @@ class CreateTransactionRequestTest extends TestCase
         $response = $connector->createTransaction($this->getMockOrderData());
 
         $response_dto = $response->toDto();
+        $this->assertInstanceOf(IsResponseData::class, $response_dto);
         $this->assertInstanceOf(CheckoutSessionResponseData::class, $response_dto);
         $this->assertEquals($response_dto->getSessionId(), $response_data['session']['id']);
         $this->assertEquals($response_dto->getSuccessIndicator(), $response_data['successIndicator']);

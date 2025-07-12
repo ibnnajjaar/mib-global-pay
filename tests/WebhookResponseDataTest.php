@@ -2,6 +2,7 @@
 
 namespace IbnNajjaar\MIBGlobalPay\Tests;
 
+use IbnNajjaar\MIBGlobalPay\Contracts\IsResponseData;
 use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
 use PHPUnit\Framework\TestCase;
 use IbnNajjaar\MIBGlobalPay\Responses\DataObjects\WebhookResponseData;
@@ -14,6 +15,7 @@ class WebhookResponseDataTest extends TestCase
     {
         $response_data = $this->getResponseData();
         $webhook_response_data = WebhookResponseData::fromArray($response_data, $this->getResponseHeaderData());
+        $this->assertInstanceOf(IsResponseData::class, $webhook_response_data);
         $this->assertEquals(strtolower($response_data['order']['status'] ?? ''), $webhook_response_data->getOrderStatus());
         $this->assertEquals(strtolower($response_data['result'] ?? ''), $webhook_response_data->getResult());
         $this->assertEquals(strtolower($response_data['response']['gatewayCode'] ?? ''), $webhook_response_data->getGatewayCode());

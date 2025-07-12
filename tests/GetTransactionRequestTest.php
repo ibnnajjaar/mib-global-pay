@@ -6,6 +6,7 @@ namespace IbnNajjaar\MIBGlobalPay\Tests;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use IbnNajjaar\MIBGlobalPay\MIBGlobalPayConnector;
+use IbnNajjaar\MIBGlobalPay\Contracts\IsResponseData;
 use IbnNajjaar\MIBGlobalPay\Requests\GetTransactionRequest;
 use IbnNajjaar\MIBGlobalPay\Responses\DataObjects\OrderResponseData;
 use IbnNajjaar\MIBGlobalPay\Responses\DataObjects\TransactionResponseData;
@@ -46,6 +47,7 @@ class GetTransactionRequestTest extends TestCase
         $response = $connector->getOrderDetails('order123');
 
         $response_dto = $response->toDto();
+        $this->assertInstanceOf(IsResponseData::class, $response_dto);
         $this->assertInstanceOf(OrderResponseData::class, $response_dto);
         $this->assertEquals($response_dto->getOrderStatus(), strtolower($response_data['status']));
         $this->assertEquals($response_dto->getTotalCapturedAmount(), $response_data['totalCapturedAmount']);
@@ -63,6 +65,7 @@ class GetTransactionRequestTest extends TestCase
 
         $index  = 0;
         foreach ($response_dto->getTransactions() as $key => $transaction) {
+            $this->assertInstanceOf(IsResponseData::class, $transaction);
             $this->assertInstanceOf(TransactionResponseData::class, $transaction);
             $this->assertNotEmpty($transaction->getRawResponse());
             $this->assertEquals($transaction->getType(), strtolower($response_data['transaction'][$index]['transaction']['type'] ?? ''));
