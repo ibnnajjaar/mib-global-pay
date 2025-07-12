@@ -4,22 +4,22 @@ namespace IbnNajjaar\MIBGlobalPay\Responses\DataObjects;
 
 use IbnNajjaar\MIBGlobalPay\Contracts\IsResponseData;
 
-class CheckoutSessionData implements IsResponseData
+class CheckoutSessionResponseData implements IsResponseData
 {
     /**
      * @var string|null
      */
-    private $sessionId;
+    private $session_id;
 
     /**
      * @var string|null
      */
-    private $successIndicator;
+    private $success_indicator;
 
     /**
      * @var array|null
      */
-    private $rawResponse;
+    private $raw_response;
 
     /**
      * CheckoutSessionData constructor.
@@ -28,11 +28,11 @@ class CheckoutSessionData implements IsResponseData
      * @param string|null $successIndicator
      * @param array|null $rawResponse
      */
-    public function __construct(?string $sessionId, ?string $successIndicator, ?array $rawResponse)
+    public function __construct(?string $session_id, ?string $success_indicator, ?array $raw_response)
     {
-        $this->sessionId = $sessionId;
-        $this->successIndicator = $successIndicator;
-        $this->rawResponse = $rawResponse;
+        $this->session_id = $session_id;
+        $this->success_indicator = $success_indicator;
+        $this->raw_response = $raw_response;
     }
 
     /**
@@ -54,7 +54,7 @@ class CheckoutSessionData implements IsResponseData
      */
     public function getSessionId(): ?string
     {
-        return $this->sessionId;
+        return $this->session_id;
     }
 
     /**
@@ -62,7 +62,7 @@ class CheckoutSessionData implements IsResponseData
      */
     public function getSuccessIndicator(): ?string
     {
-        return $this->successIndicator;
+        return $this->success_indicator;
     }
 
     /**
@@ -70,6 +70,6 @@ class CheckoutSessionData implements IsResponseData
      */
     public function getRawResponse(): ?array
     {
-        return $this->rawResponse;
+        return $this->raw_response;
     }
 }

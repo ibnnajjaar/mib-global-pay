@@ -3,6 +3,7 @@
 namespace IbnNajjaar\MIBGlobalPay\Requests;
 
 use IbnNajjaar\MIBGlobalPay\Support\Request;
+use IbnNajjaar\MIBGlobalPay\Responses\DataObjects\OrderResponseData;
 
 class GetTransactionRequest extends Request
 {
@@ -21,6 +22,6 @@ class GetTransactionRequest extends Request
 
     public function getResponseDataClass(): ?string
     {
-        return null;
+        return OrderResponseData::class;
     }
 }

@@ -6,7 +6,7 @@ use IbnNajjaar\MIBGlobalPay\Support\Request;
 use IbnNajjaar\MIBGlobalPay\Contracts\IsOrderData;
 use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
 use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\BaseOrderData;
-use IbnNajjaar\MIBGlobalPay\Responses\DataObjects\CheckoutSessionData;
+use IbnNajjaar\MIBGlobalPay\Responses\DataObjects\CheckoutSessionResponseData;
 
 class CreateTransactionRequest extends Request
 {
@@ -59,6 +59,6 @@ class CreateTransactionRequest extends Request
 
     public function getResponseDataClass(): ?string
     {
-        return CheckoutSessionData::class;
+        return CheckoutSessionResponseData::class;
     }
 }

@@ -63,7 +63,7 @@ class MIBGlobalPayConnector extends Connector
      * Retrieve payment status by order reference
      * @throws MIBGlobalPayException
      */
-    public function getTransactionStatus(string $order_reference): Response
+    public function getOrderDetails(string $order_reference): Response
     {
         return $this->send(new GetTransactionRequest($order_reference));
     }
