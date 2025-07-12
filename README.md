@@ -238,9 +238,13 @@ try {
 
 ### Handling Webhook Data
 
-Webhook notifies you of successful transactions in predefined intervals. This is very useful to mark the order as paid. Sometimes, users might close the browser or interrupt the session before the gateway returns with the transaction information after payment. In these cases, your order will remain in unpaid status in your database, even though it has been paid in the merchant portal. A webhook will send the successful transaction information to predefined url. You can view these data and then mark your order as paid. You can also set a secret to be sent with the webhook notification from merchant portal and it will be included in headers. You can use this to verify that the data is valid. Webhook notifications are post requests therefore your application should be able to accept post requests on the given endpoint.
+A webhook notifies you of successful transactions at predefined intervals, which is very useful for marking orders as paid. Sometimes, users may close their browser or interrupt the session before the payment gateway returns the transaction information. In such cases, your order might remain marked as unpaid in your database, even though the payment was completed in the merchant portal.
 
-You can convert the webhook data to a response data object like below.
+The webhook sends the successful transaction data to a predefined URL. You can use this data to update and mark the order as paid. Additionally, you can set a secret token in the merchant portal that will be included in the webhook request headers. This token can be used to verify the authenticity of the data.
+
+Since webhook notifications are sent as POST requests, your application must be able to accept POST requests at the specified endpoint.
+
+You can convert the webhook data into a response data object as shown below.
 
 ```php
 $webhook_data = WebhookResponseData::fromArray($_POST, getallheaders());
