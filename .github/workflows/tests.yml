@@ -43,4 +43,17 @@ jobs:
         run: composer install --prefer-dist --no-progress
 
       - name: Run test suite
-        run: vendor/bin/phpunit tests
+        run: |
+          if [[ "${{ startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '7.2' }}" == "true" ]]; then
+            vendor/bin/phpunit tests --coverage-clover=clover.xml
+          else
+            vendor/bin/phpunit tests
+          fi
+
+      - name: Make code coverage badge
+        if: startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '7.2'
+        uses: timkrase/phpunit-coverage-badge@v1.2.1
+        with:
+          coverage_badge_path: .github/coverage.svg
+          push_badge: true
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
