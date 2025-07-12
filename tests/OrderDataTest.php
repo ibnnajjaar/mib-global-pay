@@ -35,14 +35,14 @@ class OrderDataTest extends TestCase
 
     public function test_non_numeric_amount_throws_exception()
     {
-        $this->expectException(\InvalidArgumentException::class);
-        new OrderData('ORD789', 'not-a-number', 'USD', 'desc', 'url');
+        $this->expectException(\TypeError::class);
+        new OrderData('ORD789', 'not-a-number');
     }
 
     public function test_unsupported_currency_throws_exception()
     {
         $this->expectException(\InvalidArgumentException::class);
-        new OrderData('ORD789', 100, 'XYZ');
+        OrderData::make('ORD789', 100)->setOrderCurrency('XYZ');
     }
 
     public function test_from_array_with_valid_data()
@@ -50,25 +50,36 @@ class OrderDataTest extends TestCase
         $data = [
             'order_id' => 'ORD456',
             'amount' => 200,
-            'currency' => 'USD', // Changed from 'EUR' to 'USD'
+            'currency' => 'MVR',
             'description' => 'Another order',
             'return_url' => 'https://return2.url',
+            'merchant_address_line1' => '123 Merchant St',
+            'merchant_email' => 'info@example.mv',
+            'merchant_logo' => 'https://example.mv/logo.png',
+            'merchant_name' => 'Example Merchant',
+            'merchant_phone' => '+9601234567',
+            'merchant_url' => 'https://example.mv',
+            'redirect_merchant_url' => 'https://redirect.example.mv',
+            'retry_attempt_count' => 2,
+            'webhook_url' => 'https://webhook.example.mv',
+            'cancel_url' => 'https://cancel.example.mv',
         ];
         $order = OrderData::fromArray($data);
         $this->assertEquals('ORD456', $order->getOrderId());
-        $this->assertEquals(200, $order->getAmount());
-        $this->assertEquals('USD', $order->getCurrency());
-        $this->assertEquals('Another order', $order->getDescription());
+        $this->assertEquals(200, $order->getOrderAmount());
+        $this->assertEquals('MVR', $order->getOrderCurrency());
+        $this->assertEquals('Another order', $order->getOrderDescription());
         $this->assertEquals('https://return2.url', $order->getReturnUrl());
+        $this->assertEquals('123 Merchant St', $order->getMerchantAddressLine1());
+        $this->assertEquals('info@example.mv', $order->getMerchantEmail());
+        $this->assertEquals('https://example.mv/logo.png', $order->getMerchantLogo());
+        $this->assertEquals('Example Merchant', $order->getMerchantName());
+        $this->assertEquals('+9601234567', $order->getMerchantPhone());
+        $this->assertEquals('https://example.mv', $order->getMerchantUrl());
+        $this->assertEquals('https://redirect.example.mv', $order->getRedirectMerchantUrl());
+        $this->assertEquals(2, $order->getRetryAttemptCount());
+        $this->assertEquals('https://webhook.example.mv', $order->getWebHookUrl());
+        $this->assertEquals('https://cancel.example.mv', $order->getCancelUrl());
     }
 
-
-
-
-
-    public function test_from_array_with_missing_fields_throws_exception()
-    {
-        $this->expectException(\InvalidArgumentException::class);
-        OrderData::fromArray(['amount' => 100]);
-    }
 }

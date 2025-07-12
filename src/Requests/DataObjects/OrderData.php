@@ -38,6 +38,26 @@ class OrderData extends BaseOrderData
         return new self($order_id, $amount);
     }
 
+    public static function fromArray(array $data): self
+    {
+        return self::make(
+            $data['order_id'] ?? null,
+            $data['amount'] ?? null
+        )
+            ->setOrderDescription($data['description'] ?? null)
+            ->setReturnUrl($data['return_url'] ?? null)
+            ->setMerchantAddressLine1($data['merchant_address_line1'] ?? null)
+            ->setMerchantEmail($data['merchant_email'] ?? null)
+            ->setMerchantLogo($data['merchant_logo'] ?? null)
+            ->setMerchantName($data['merchant_name'] ?? null)
+            ->setMerchantPhone($data['merchant_phone'] ?? null)
+            ->setMerchantUrl($data['merchant_url'] ?? null)
+            ->setRedirectMerchantUrl($data['redirect_merchant_url'] ?? null)
+            ->setRetryAttemptCount($data['retry_attempt_count'] ?? 1)
+            ->setWebhookUrl($data['webhook_url'] ?? null)
+            ->setCancelUrl($data['cancel_url'] ?? null);
+    }
+
     public function getOrderDescription(): ?string
     {
         return $this->description;

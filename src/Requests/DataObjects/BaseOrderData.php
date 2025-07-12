@@ -8,7 +8,7 @@ abstract class BaseOrderData implements IsOrderData
 {
     private $order_id;
     private $amount;
-    private $currency;
+    private $currency = 'MVR';
 
     public function __construct(
         string $order_id,
@@ -37,9 +37,9 @@ abstract class BaseOrderData implements IsOrderData
         $this->order_id = $order_id;
     }
 
-    public function setOrderAmount($amount)
+    public function setOrderAmount(?float $amount = null)
     {
-        if ($amount === null || $amount === '') {
+        if ($amount === null) {
             throw new \InvalidArgumentException('Amount is required');
         }
 
@@ -47,8 +47,7 @@ abstract class BaseOrderData implements IsOrderData
             throw new \InvalidArgumentException('Amount must be numeric');
         }
 
-        $float_amount = (float) $amount;
-        if ($float_amount <= 0) {
+        if ($amount <= 0) {
             throw new \InvalidArgumentException('Amount must be greater than 0');
         }
 
