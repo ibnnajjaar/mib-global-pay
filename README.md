@@ -30,6 +30,7 @@ A Framework-agnostic PHP SDK for integrating with MIB Global Pay – enabling me
   - [Test Card Numbers](#test-card-numbers)
 - [Testing](#testing)
 - [Contributing](#contributing)
+- [Contributors](#contributors)
 - [License](#license)
 
 ## Requirements
@@ -356,6 +357,9 @@ composer test
 3. Add tests for new functionality
 4. Ensure all tests pass
 5. Submit a pull request
+
+## Contributors
+- [Hussain Afeef](https://abunooh.com)
 
 ## License
 
