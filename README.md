@@ -3,7 +3,6 @@
 [![Tests](https://github.com/ibnnajjaar/mib-global-pay/workflows/Tests/badge.svg)](https://github.com/ibnnajjaar/mib-global-pay/actions)
 ![Code Coverage Badge](./.github/coverage.svg)
 
-Update
 A Framework-agnostic PHP SDK for integrating with MIB Global Pay – enabling merchants to initiate payments and retrieve payment statuses using a clean, developer-friendly interface.
 
 ## Table of Contents
