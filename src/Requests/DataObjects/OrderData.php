@@ -47,7 +47,7 @@ class OrderData extends BaseOrderData
             ->setReturnUrl($data['return_url'] ?? null)
             ->setMerchantAddressLine1($data['merchant_address_line1'] ?? null)
             ->setMerchantEmail($data['merchant_email'] ?? null)
-            ->setMerchantLogo($data['merchant_logo'] ?? null)
+            ->setMerchantLogoUrl($data['merchant_logo'] ?? null)
             ->setMerchantName($data['merchant_name'] ?? null)
             ->setMerchantPhone($data['merchant_phone'] ?? null)
             ->setMerchantUrl($data['merchant_url'] ?? null)
@@ -77,7 +77,7 @@ class OrderData extends BaseOrderData
         return $this->merchant_email;
     }
 
-    public function getMerchantLogo()
+    public function getMerchantLogoUrl()
     {
         return $this->merchant_logo;
     }
@@ -146,6 +146,7 @@ class OrderData extends BaseOrderData
      */
     public function setReturnUrl($return_url): self
     {
+        $this->trimUrl($return_url);
         $this->validateUrl($return_url, 'Return URL');
         $this->return_url = $return_url;
         return $this;
@@ -154,6 +155,7 @@ class OrderData extends BaseOrderData
     // Set webhook URL, cancel URL, and merchant details if needed
     public function setWebhookUrl($webhook_url): self
     {
+        $this->trimUrl($webhook_url);
         $this->validateUrl($webhook_url, 'Webhook URL');
         $this->webhook_url = $webhook_url;
         return $this;
@@ -161,6 +163,7 @@ class OrderData extends BaseOrderData
 
     public function setCancelUrl($cancel_url): self
     {
+        $this->trimUrl($cancel_url);
         $this->validateUrl($cancel_url, 'Cancel URL');
         $this->cancel_url = $cancel_url;
         return $this;
@@ -193,8 +196,10 @@ class OrderData extends BaseOrderData
      * @param string|null $merchant_logo
      * @return self
      * */
-    public function setMerchantLogo(?string $merchant_logo): self
+    public function setMerchantLogoUrl(?string $merchant_logo): self
     {
+        $this->trimUrl($merchant_logo);
+        $this->validateUrl($merchant_logo, 'Merchant Logo URL');
         $this->merchant_logo = $merchant_logo;
         return $this;
     }
@@ -210,6 +215,8 @@ class OrderData extends BaseOrderData
      * */
     public function setMerchantUrl(?string $merchant_url): self
     {
+        $this->trimUrl($merchant_url);
+        $this->validateUrl($merchant_url, 'Merchant URL');
         $this->merchant_url = $merchant_url;
         return $this;
     }
@@ -225,6 +232,8 @@ class OrderData extends BaseOrderData
      * */
     public function setRedirectMerchantUrl(?string $redirect_merchant_url): self
     {
+        $this->trimUrl($redirect_merchant_url);
+        $this->validateUrl($redirect_merchant_url, 'Redirect Merchant URL');
         $this->redirect_merchant_url = $redirect_merchant_url;
         return $this;
     }

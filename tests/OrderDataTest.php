@@ -17,7 +17,7 @@ class OrderDataTest extends TestCase
         $this->assertNull($order_data->getReturnUrl());
         $this->assertNull($order_data->getMerchantAddressLine1());
         $this->assertNull($order_data->getMerchantEmail());
-        $this->assertNull($order_data->getMerchantLogo());
+        $this->assertNull($order_data->getMerchantLogoUrl());
         $this->assertNull($order_data->getMerchantName());
         $this->assertNull($order_data->getMerchantPhone());
         $this->assertNull($order_data->getMerchantUrl());
@@ -78,7 +78,7 @@ class OrderDataTest extends TestCase
         $this->assertEquals('https://return2.url', $order->getReturnUrl());
         $this->assertEquals('123 Merchant St', $order->getMerchantAddressLine1());
         $this->assertEquals('info@example.mv', $order->getMerchantEmail());
-        $this->assertEquals('https://example.mv/logo.png', $order->getMerchantLogo());
+        $this->assertEquals('https://example.mv/logo.png', $order->getMerchantLogoUrl());
         $this->assertEquals('Example Merchant', $order->getMerchantName());
         $this->assertEquals('+9601234567', $order->getMerchantPhone());
         $this->assertEquals('https://example.mv', $order->getMerchantUrl());

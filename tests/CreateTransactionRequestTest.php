@@ -22,7 +22,7 @@ class CreateTransactionRequestTest extends TestCase
                         ->setCancelUrl('https://cancel.url')
                         ->setMerchantAddressLine1('123 Main St')
                         ->setMerchantEmail('merchant@example.mv')
-                        ->setMerchantLogo('https://logo.url')
+                        ->setMerchantLogoUrl('https://logo.url')
                         ->setMerchantName('Merchant Name')
                         ->setMerchantPhone('1234567890')
                         ->setMerchantUrl('https://merchant.url')

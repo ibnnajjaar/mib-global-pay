@@ -45,7 +45,7 @@ class CreateTransactionRequest extends Request
                         'line1' => $this->order_data->getMerchantAddressLine1(),
                     ],
                     'email' => $this->order_data->getMerchantEmail(),
-                    'logo' => $this->order_data->getMerchantLogo(),
+                    'logo' => $this->order_data->getMerchantLogoUrl(),
                     'name' => $this->order_data->getMerchantName(),
                     'phone' => $this->order_data->getMerchantPhone(),
                     'url' => $this->order_data->getMerchantUrl(),
