@@ -2,7 +2,6 @@
 
 namespace IbnNajjaar\MIBGlobalPay\Tests;
 
-
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use IbnNajjaar\MIBGlobalPay\MIBGlobalPayConnector;
@@ -13,7 +12,6 @@ use IbnNajjaar\MIBGlobalPay\Responses\DataObjects\TransactionResponseData;
 
 class GetTransactionRequestTest extends TestCase
 {
-
     public function test_get_transaction_request_endpoint()
     {
         $order_reference = 'order123';

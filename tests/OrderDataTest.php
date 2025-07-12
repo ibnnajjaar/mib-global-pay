@@ -2,8 +2,8 @@
 
 namespace IbnNajjaar\MIBGlobalPay\Tests;
 
-use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
 use PHPUnit\Framework\TestCase;
+use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
 
 class OrderDataTest extends TestCase
 {
@@ -87,5 +87,4 @@ class OrderDataTest extends TestCase
         $this->assertEquals('https://webhook.example.mv', $order->getWebHookUrl());
         $this->assertEquals('https://cancel.example.mv', $order->getCancelUrl());
     }
-
 }

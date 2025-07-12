@@ -4,14 +4,14 @@ namespace IbnNajjaar\MIBGlobalPay;
 
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\Exception\RequestException;
-use IbnNajjaar\MIBGlobalPay\Support\Connector;
-use IbnNajjaar\MIBGlobalPay\Support\Response;
 use IbnNajjaar\MIBGlobalPay\Support\Request;
+use IbnNajjaar\MIBGlobalPay\Support\Response;
+use IbnNajjaar\MIBGlobalPay\Support\Connector;
 use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
-use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\BaseOrderData;
 use IbnNajjaar\MIBGlobalPay\Requests\GetTransactionRequest;
 use IbnNajjaar\MIBGlobalPay\Exceptions\MIBGlobalPayException;
 use IbnNajjaar\MIBGlobalPay\Requests\CreateTransactionRequest;
+use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\BaseOrderData;
 
 class MIBGlobalPayConnector extends Connector
 {
@@ -91,7 +91,7 @@ class MIBGlobalPayConnector extends Connector
 
     public function getMerchantPortalUrl(): string
     {
-       return $this->merchant_portal_url;
+        return $this->merchant_portal_url;
     }
 
     public function getApiVersion(): string

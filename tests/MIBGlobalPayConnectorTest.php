@@ -2,10 +2,10 @@
 
 namespace IbnNajjaar\MIBGlobalPay\Tests;
 
+use PHPUnit\Framework\TestCase;
 use IbnNajjaar\MIBGlobalPay\MIBGlobalPayConnector;
 use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
 use IbnNajjaar\MIBGlobalPay\Exceptions\MIBGlobalPayException;
-use PHPUnit\Framework\TestCase;
 
 class MIBGlobalPayConnectorTest extends TestCase
 {

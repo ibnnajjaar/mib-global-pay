@@ -2,7 +2,6 @@
 
 namespace IbnNajjaar\MIBGlobalPay\Tests;
 
-
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use IbnNajjaar\MIBGlobalPay\MIBGlobalPayConnector;
@@ -146,4 +145,3 @@ class CreateTransactionRequestTest extends TestCase
         ];
     }
 }
-

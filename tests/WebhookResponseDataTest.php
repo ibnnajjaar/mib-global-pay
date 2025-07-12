@@ -2,15 +2,14 @@
 
 namespace IbnNajjaar\MIBGlobalPay\Tests;
 
+use PHPUnit\Framework\TestCase;
 use IbnNajjaar\MIBGlobalPay\Contracts\IsResponseData;
 use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
-use PHPUnit\Framework\TestCase;
 use IbnNajjaar\MIBGlobalPay\Responses\DataObjects\WebhookResponseData;
 use IbnNajjaar\MIBGlobalPay\Responses\DataObjects\HostedCheckoutReturnData;
 
 class WebhookResponseDataTest extends TestCase
 {
-
     public function test_webhook_response_data_dto_is_valid()
     {
         $response_data = $this->getResponseData();
@@ -59,5 +58,4 @@ class WebhookResponseDataTest extends TestCase
             ]
         ];
     }
-
 }

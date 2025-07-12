@@ -6,7 +6,6 @@ use IbnNajjaar\MIBGlobalPay\Contracts\IsResponseData;
 
 class OrderResponseData implements IsResponseData
 {
-
     private $order_status;
 
     private $total_captured_amount;
@@ -36,7 +35,7 @@ class OrderResponseData implements IsResponseData
         return new self(
             $response['status'] ? strtolower($response['status']) : null,
             isset($response['totalCapturedAmount']) ? (float) $response['totalCapturedAmount'] : null,
-                $transactions_data,
+            $transactions_data,
             $response
         );
     }

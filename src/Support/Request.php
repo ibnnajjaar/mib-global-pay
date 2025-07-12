@@ -71,5 +71,4 @@ abstract class Request
     }
 
     abstract public function getResponseDataClass(): ?string;
-
 }

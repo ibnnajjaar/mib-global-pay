@@ -6,7 +6,6 @@ use IbnNajjaar\MIBGlobalPay\Contracts\IsResponseData;
 
 class TransactionResponseData implements IsResponseData
 {
-
     private $type;
     private $result;
     private $gateway_code;
@@ -25,7 +24,7 @@ class TransactionResponseData implements IsResponseData
         return new self(
             $response['result'] ? strtolower($response['result']) : null,
             $response['response']['gatewayCode'] ? strtolower($response['response']['gatewayCode']) : null,
-                $response['transaction']['type'] ? strtolower($response['transaction']['type']) : null,
+            $response['transaction']['type'] ? strtolower($response['transaction']['type']) : null,
             $response
         );
     }
@@ -44,7 +43,6 @@ class TransactionResponseData implements IsResponseData
     {
         return $this->gateway_code ? strtolower($this->gateway_code) : null;
     }
-
 
     public function getRawResponse(): ?array
     {

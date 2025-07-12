@@ -4,9 +4,9 @@ namespace IbnNajjaar\MIBGlobalPay\Support\Traits;
 
 use GuzzleHttp\Client;
 use Psr\Http\Message\ResponseInterface;
+use GuzzleHttp\Exception\RequestException;
 use IbnNajjaar\MIBGlobalPay\Support\Request;
 use IbnNajjaar\MIBGlobalPay\Support\Response;
-use GuzzleHttp\Exception\RequestException;
 use IbnNajjaar\MIBGlobalPay\Exceptions\MIBGlobalPayException;
 
 trait SendsRequests
@@ -23,7 +23,6 @@ trait SendsRequests
             $response = $this->makeHttpRequest($client, $request, $options);
 
             return $this->createResponse($response, $request->getResponseDataClass());
-
         } catch (RequestException $exception) {
             throw new MIBGlobalPayException(
                 'HTTP request failed: ' . $exception->getMessage(),

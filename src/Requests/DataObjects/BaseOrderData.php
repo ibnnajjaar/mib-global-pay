@@ -13,8 +13,7 @@ abstract class BaseOrderData implements IsOrderData
     public function __construct(
         string $order_id,
         float $amount
-    )
-    {
+    ) {
         $this->setOrderId($order_id);
         $this->setOrderAmount($amount);
     }

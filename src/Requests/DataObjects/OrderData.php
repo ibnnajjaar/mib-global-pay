@@ -8,7 +8,6 @@ use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\BaseOrderData;
 
 class OrderData extends BaseOrderData
 {
-
     use HasUrl;
 
     private $description = null;
@@ -252,5 +251,4 @@ class OrderData extends BaseOrderData
         $this->retry_attempt_count = $retry_attempt_count;
         return $this;
     }
-
 }
