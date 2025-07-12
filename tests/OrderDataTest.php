@@ -2,7 +2,7 @@
 
 namespace IbnNajjaar\MIBGlobalPay\Tests;
 
-use IbnNajjaar\MIBGlobalPay\DataObjects\OrderData;
+use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
 use PHPUnit\Framework\TestCase;
 
 class OrderDataTest extends TestCase

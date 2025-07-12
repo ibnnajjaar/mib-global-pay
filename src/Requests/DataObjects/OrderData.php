@@ -1,9 +1,10 @@
 <?php
 
-namespace IbnNajjaar\MIBGlobalPay\DataObjects;
+namespace IbnNajjaar\MIBGlobalPay\Requests\DataObjects;
 
-use IbnNajjaar\MIBGlobalPay\Support\IsOrderData;
+use IbnNajjaar\MIBGlobalPay\Contracts\IsOrderData;
 use IbnNajjaar\MIBGlobalPay\Support\Traits\HasUrl;
+use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\BaseOrderData;
 
 class OrderData extends BaseOrderData
 {

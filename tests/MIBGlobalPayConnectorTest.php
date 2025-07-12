@@ -3,7 +3,7 @@
 namespace IbnNajjaar\MIBGlobalPay\Tests;
 
 use IbnNajjaar\MIBGlobalPay\MIBGlobalPayConnector;
-use IbnNajjaar\MIBGlobalPay\DataObjects\OrderData;
+use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
 use IbnNajjaar\MIBGlobalPay\Exceptions\MIBGlobalPayException;
 use PHPUnit\Framework\TestCase;
 

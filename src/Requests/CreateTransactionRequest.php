@@ -3,10 +3,10 @@
 namespace IbnNajjaar\MIBGlobalPay\Requests;
 
 use IbnNajjaar\MIBGlobalPay\Support\Request;
-use IbnNajjaar\MIBGlobalPay\Support\IsOrderData;
-use IbnNajjaar\MIBGlobalPay\DataObjects\OrderData;
-use IbnNajjaar\MIBGlobalPay\DataObjects\BaseOrderData;
-use IbnNajjaar\MIBGlobalPay\DataObjects\CheckoutSessionData;
+use IbnNajjaar\MIBGlobalPay\Contracts\IsOrderData;
+use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
+use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\BaseOrderData;
+use IbnNajjaar\MIBGlobalPay\Responses\DataObjects\CheckoutSessionData;
 
 class CreateTransactionRequest extends Request
 {

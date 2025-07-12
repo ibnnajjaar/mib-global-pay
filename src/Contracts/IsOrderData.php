@@ -1,6 +1,6 @@
 <?php
 
-namespace IbnNajjaar\MIBGlobalPay\Support;
+namespace IbnNajjaar\MIBGlobalPay\Contracts;
 
 interface IsOrderData
 {

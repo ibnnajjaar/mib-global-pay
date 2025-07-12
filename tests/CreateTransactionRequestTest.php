@@ -4,10 +4,10 @@ namespace IbnNajjaar\MIBGlobalPay\Tests;
 
 
 use PHPUnit\Framework\TestCase;
-use IbnNajjaar\MIBGlobalPay\DataObjects\OrderData;
+use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
 use IbnNajjaar\MIBGlobalPay\Requests\CreateTransactionRequest;
-use IbnNajjaar\MIBGlobalPay\DataObjects\BaseOrderData;
-use IbnNajjaar\MIBGlobalPay\DataObjects\CheckoutSessionData;
+use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\BaseOrderData;
+use IbnNajjaar\MIBGlobalPay\Responses\DataObjects\CheckoutSessionData;
 
 class CreateTransactionRequestTest extends TestCase
 {

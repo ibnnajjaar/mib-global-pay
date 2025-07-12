@@ -1,8 +1,8 @@
 <?php
 
-namespace IbnNajjaar\MIBGlobalPay\DataObjects;
+namespace IbnNajjaar\MIBGlobalPay\Responses\DataObjects;
 
-use IbnNajjaar\MIBGlobalPay\Support\IsResponseData;
+use IbnNajjaar\MIBGlobalPay\Contracts\IsResponseData;
 
 class CheckoutSessionData implements IsResponseData
 {

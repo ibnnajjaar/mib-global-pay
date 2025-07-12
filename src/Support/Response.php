@@ -4,6 +4,7 @@ namespace IbnNajjaar\MIBGlobalPay\Support;
 
 use GuzzleHttp\Psr7\Response as GuzzleResponse;
 use Psr\Http\Message\ResponseInterface;
+use IbnNajjaar\MIBGlobalPay\Contracts\IsResponseData;
 use IbnNajjaar\MIBGlobalPay\Exceptions\MIBGlobalPayException;
 
 class Response

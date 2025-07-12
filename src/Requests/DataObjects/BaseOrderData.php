@@ -1,8 +1,8 @@
 <?php
 
-namespace IbnNajjaar\MIBGlobalPay\DataObjects;
+namespace IbnNajjaar\MIBGlobalPay\Requests\DataObjects;
 
-use IbnNajjaar\MIBGlobalPay\Support\IsOrderData;
+use IbnNajjaar\MIBGlobalPay\Contracts\IsOrderData;
 
 abstract class BaseOrderData implements IsOrderData
 {
