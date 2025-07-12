@@ -63,11 +63,9 @@ class Response
      */
     public function toDto(): IsResponseData
     {
-        if ($this->isSuccessful()) {
-            return call_user_func([$this->response_data_class, 'fromArray'], $this->toArray());
-        }
+        $this->throw();
 
-        $this->throw(); // Ensure response is successful
+        return call_user_func([$this->response_data_class, 'fromArray'], $this->toArray());
     }
 
     public function isSuccessful(): bool
