@@ -49,5 +49,8 @@ jobs:
           echo "Test files:"
           find tests/ -name "*Test.php" 2>/dev/null || echo "No test files found"
 
+      - name: Run single test suite
+        run: vendor/bin/phpunit tests
+
       - name: Run test suite
-        run: vendor/bin/phpunit
+        run: vendor/bin/phpunit --verbose --debug
