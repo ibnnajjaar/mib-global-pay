@@ -45,7 +45,7 @@ jobs:
       - name: Run test suite
         run: |
           if [[ "${{ startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '7.2' }}" == "true" ]]; then
-            vendor/bin/phpunit tests --coverage-clover=clover.xml
+            vendor/bin/phpunit tests --coverage-clover=clover.xml --whitelist=src
           else
             vendor/bin/phpunit tests
           fi
@@ -57,3 +57,4 @@ jobs:
           coverage_badge_path: .github/coverage.svg
           push_badge: true
           repo_token: ${{ secrets.GITHUB_TOKEN }}
+          report: clover.xml
