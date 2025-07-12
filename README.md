@@ -7,16 +7,30 @@ A Framework-agnostic PHP SDK for integrating with MIB Global Pay – enabling me
 
 ## Table of Contents
 
-- Requirements
-- Installation
-- Setup & Configuration
-- Available Operations
-- Error Handling
-- API Response Structures
-- Security Considerations
-- Testing
-- Roadmap
-- License
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Setup & Configuration](#setup--configuration)
+  - [Environment Setup](#environment-setup)
+  - [Client Initialization](#client-initialization)
+  - [Environment Variables (Recommended)](#environment-variables-recommended)
+- [Implementation Guide](#implementation-guide)
+  - [Create Payment](#create-payment)
+  - [Redirect to MIB Checkout](#redirect-to-mib-checkout)
+  - [Handle Payment Completion](#handle-payment-completion)
+  - [Retrieve Payment Status](#retrieve-payment-status)
+  - [Handling Webhook Data](#handling-webhook-data)
+- [Error Handling](#error-handling)
+- [API Response Structures](#api-response-structures)
+  - [Create Payment Response](#create-payment-response)
+  - [Payment Status Response](#payment-status-response)
+  - [Response Methods](#response-methods)
+- [Security Considerations](#security-considerations)
+  - [Credential Management](#credential-management)
+  - [HTTPS Requirements](#https-requirements)
+  - [Test Card Numbers](#test-card-numbers)
+- [Testing](#testing)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Requirements
 
@@ -52,7 +66,7 @@ Initialize the client:
 ```php
 use IbnNajjaar\MIBGlobalPay\MIBGlobalPayConnector;
 
-$client = new MIBGlobalPayConnector($merchant_portal_url, $merchant_id, $api_password);
+$connector = new MIBGlobalPayConnector($merchant_portal_url, $merchant_id, $api_password);
 ```
 
 ### Environment Variables (Recommended)
@@ -75,35 +89,53 @@ $connector = new MIBGlobalPayConnector(
 
 **Note:** NEVER commit your env file to the repository.
 
-## Available Operations
+## Implementation Guide
 
 ### Create Payment
 
 To initiate a payment, first prepare the order data:
 
 ```php
-use IbnNajjaar\MIBGlobalPay\Data\OrderData;
+// Minimum required data
+$order_id = 'order123';
+$amount = 100.00;
 
-// Construction of OrderData validates the provided values
-$payment_details = OrderData::fromArray([
-    'id' => 'order_12345',                    // Unique identifier for the order
-    'amount' => 1000.00,                      // Amount in decimals
-    'currency' => 'MVR',                      // ISO 4217 currency code
-    'description' => 'Test Payment',          // Payment description
-    'return_url' => 'https://yourwebsite.com/orders/order_12345/process', // gateway will redirect back to this URL after the payment completion
-]);
+$payment_details = OrderData::make($order_id, $amount);
+
+// You can chain methods to set other information. All available methods are as follows
+$payment_details->setOrderCurrency('MVR')
+				        ->setOrderDescription('Test Order')
+	              ->setMerchantAddressLine1('Sample, Majeedhee Magu')
+	              ->setMerchantEmail('merchant@example.mv')
+	              ->setMerchantLogo('https://example.mv/logo.svg')
+	              ->setMerchantName('Merchant Name')
+	              ->setMerchantPhone('1234567890')
+	              ->setMerchantUrl('https://example.mv')
+	              // return url is important though not required
+	              // this is the url the gateway will redirect user after paym
+	              ->setReturnUrl('https://example.mv/order123/process')
+	              ->setCancelUrl('https://example.mv/order123/process')
+	              ->setRedirectMerchantUrl('https://example.mv/order123/process')
+	              ->setWebHookUrl('https://example.mv/webhook')
+	              ->setRetryAttemptCount(3);
+
+```
+
+Send the request with the data.
+
+```php
+use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
 
 try {
-    $response = $connector->createTransaction($payment_details->toArray());
-    $response_data = json_decode($response->getBody()->getContents(), true);
+    $response = $connector->createTransaction($payment_details);
+    $response_data = $response->toDto();
 
-    $session_id = $response_data['session']['id'] ?? null;
-    $success_indicator = $response_data['successIndicator'] ?? null;
+    $session_id = $response_data->getSessionId();
+    $success_indicator = $response_data->getSuccessIndicator();
 
     // Store success indicator for later verification
     // You may store it in your transaction or order record.
-    // This will be used later to verify payment
-    $_SESSION['success_indicator'] = $success_indicator;
+    // This will be used later to verify paymen
 
 } catch (Exception $e) {
     // Handle error appropriately
@@ -154,14 +186,15 @@ After the payment process, MIB will redirect the user to the `return_url` you pr
 
 ```php
 // Get the result indicator from the redirect
-$result_indicator = $_GET['resultIndicator'] ?? null;
+$return_data = HostedCheckoutReturnData::fromArray($_GET)
+$result_indicator = $return_data->getResultIndicator();
 
 // Retrieve the stored success indicator
-$success_indicator = $_SESSION['success_indicator'] ?? null;
-
 // Verify payment result
-if ($result_indicator && $success_indicator == $result_indicator) {
+if ($result_indicator && $result_indicator == $success_indicator) {
     // Payment was successful
+    // Normally you should make a get request to get order details
+    // to confirm the payment before marking order as paid
     echo "Payment was successful!";
 
 } else {
@@ -178,16 +211,20 @@ To double-check the status of a payment via API:
 $order_reference = 'order_12345'; // Use the order ID you saved earlier
 
 try {
-    $response = $connector->getTransaction($order_reference);
-    $response_data = json_decode($response->getBody()->getContents(), true);
+    $response = $connector->getOrderDetails($order_reference);
+    $response_data = $response->toDto();
 
-		// You can log the $response_data and use it to determine if
-		// the payment was processed, here I am using the status
-    $status = $response_data['status'] ?? null;
-    
-    if ($status === 'CAPTURED') {
-	    // Update order as paid
- 
+		// Available methods on dto
+		$response_data->getOrderStatus();
+		$response_data->getTotalCapturedAmount();
+		$response_data->getTransactions();
+		$response_data->getRawResponse();
+		$response_data->paymentSuccessfullyCaptured();
+		
+		// to mark the order as paid
+		if ($response_data->paymentSuccessfullyCaptured()) {
+			// mark order as paid
+		}
 
 } catch (Exception $e) {
     error_log('Failed to retrieve payment status: ' . $e->getMessage());
@@ -196,7 +233,29 @@ try {
 
 ```
 
-**Best Practice:** Always verify payment status with the API for critical orders.
+**Best Practice:** Always verify payment status with the get order API for critical orders.
+
+### Handling Webhook Data
+
+Webhook notifies you of successful transactions in predefined intervals. This is very useful to mark the order as paid. Sometimes, users might close the browser or interrupt the session before the gateway returns with the transaction information after payment. In these cases, your order will remain in unpaid status in your database, even though it has been paid in the merchant portal. A webhook will send the successful transaction information to predefined url. You can view these data and then mark your order as paid. You can also set a secret to be sent with the webhook notification from merchant portal and it will be included in headers. You can use this to verify that the data is valid. Webhook notifications are post requests therefore your application should be able to accept post requests on the given endpoint.
+
+You can convert the webhook data to a response data object like below.
+
+```php
+$webhook_data = WebhookResponseData::fromArray($_POST, getallheaders());
+
+// Available methods: returns all strings or null
+$webhook_data->getOrderReference();
+$webhook_data->getOrderAmount(); // returns float|null
+$webhook_data->getOrderCurrency();
+$webhook_data->getOrderStatus();
+$webhook_data->getNotificationSecret();
+$webhook_data->getResult();
+$webhook_data->getGatewayCode();
+$webhook_data->getRawResponse();
+
+$webhook_data->paymentIsSuccessful(); // returns a boolean
+```
 
 ## Error Handling
 
@@ -205,7 +264,7 @@ The SDK may encounter various errors during API calls. Always implement proper e
 ```php
 try {
 
-    $response = $connector->createTransaction($payment_details->toArray());
+    $response = $client->transactions->create($payment_details->toArray());
     $response_data = json_decode($response->getBody()->getContents(), true);
     
 } catch (Exception $e) {
@@ -221,11 +280,13 @@ try {
 
 ### Create Payment Response
 
+This is a typical response you will receive when you send create transaction request.
+
 ```php
 [
-    'checkoutMode' => 'WEBSITE',
-    'merchant' => 'YOURMERCHANTID',
-    'result' => 'SUCCESS',
+		'checkoutMode' => 'WEBSITE',
+		'merchant' => 'YOURMERCHANTID',
+		'result' => 'SUCCESS',
     'session' => [
         'id' => 'SESSION_abc123', // session id
         'udpateStatus' => 'SUCCESS',
@@ -251,20 +312,18 @@ This is a typical response you will receive to your return url.
 
 **Note:** order id is present because it was included the order id in the return url. If you did not include order id in the return url, order key will not be present.
 
-### Payment Status Values
+### Response Methods
 
-Here are some of the status values you may receive with the order details. Note that these are not all the values you will receive for the status.
+All responses has the following methods available
 
-- **CAPTURED**: The authorized amount for this order, in full or excess, has been captured successfully.
-- **CANCELLED**: The initial transaction for this order has been voided successfully.
-- **DISBURSED**: The order amount has successfully been disbursed to the payer.
-- **DISPUTED:** The payment has been disputed and is under investigation. A request for information has been received or a chargeback is pending.
-- **FAILED**: The payment has not been successful.
-- **PARTIALLY_REFUNDED**: The payment has been captured in part, full, or excess, but the captured amount in part has been refunded successfully.
-- **REFUNDED**: The payment has been captured in part, full, or excess, but the captured amount in full has been refunded successfully.
-- **VERIFIED**: The card details for this order have successfully been verified. No payment has yet been initiated or made.
-
-You may also chose to compare the amount and totalCapturedAmount for verification.
+- getStatusCode(): returns int
+- getHeaders(): returns an array
+- getBody(): returns json string
+- toArray(): returns an array
+- toDto(): returns a data transfer object defined in the request
+- isSuccessful(): returns a boolean
+- isFailed(): returns a boolean
+- throw(): throws an exception on failed response
 
 ## Security Considerations
 
@@ -273,7 +332,6 @@ You may also chose to compare the amount and totalCapturedAmount for verificatio
 - Store API credentials in environment variables
 - Never commit credentials to version control
 - Use different credentials for sandbox and production
-- Rotate credentials regularly
 
 ### HTTPS Requirements
 
@@ -290,16 +348,6 @@ Use test card numbers provided by the bank.  Test cards will be listed in the do
 ```bash
 composer test
 ```
-When using docker, you can run the tests using:
-
-```bash
-docker-compose run --rm php vendor/bin/phpunit
-```
-
-## Roadmap
-
-- [ ]  Support for Webhook verification
-- [ ]  Add support for refunds and voids
 
 ## Contributing
 
