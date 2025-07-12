@@ -40,5 +40,14 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
 
+      - name: Debug test setup
+        run: |
+          echo "Project structure:"
+          find . -type f -name "*.php" | head -20
+          echo "Tests directory:"
+          ls -la tests/ || echo "tests directory not found"
+          echo "Test files:"
+          find tests/ -name "*Test.php" 2>/dev/null || echo "No test files found"
+
       - name: Run test suite
         run: vendor/bin/phpunit
