@@ -12,24 +12,24 @@ A Framework-agnostic PHP SDK for integrating with MIB Global Pay – enabling me
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Setup & Configuration](#setup--configuration)
-  - [Environment Setup](#environment-setup)
-  - [Client Initialization](#client-initialization)
-  - [Environment Variables (Recommended)](#environment-variables-recommended)
+    - [Environment Setup](#environment-setup)
+    - [Client Initialization](#client-initialization)
+    - [Environment Variables (Recommended)](#environment-variables-recommended)
 - [Implementation Guide](#implementation-guide)
-  - [Create Payment](#create-payment)
-  - [Redirect to MIB Checkout](#redirect-to-mib-checkout)
-  - [Handle Payment Completion](#handle-payment-completion)
-  - [Retrieve Payment Status](#retrieve-payment-status)
-  - [Handling Webhook Data](#handling-webhook-data)
+    - [Create Payment](#create-payment)
+    - [Redirect to MIB Checkout](#redirect-to-mib-checkout)
+    - [Handle Payment Completion](#handle-payment-completion)
+    - [Retrieve Payment Status](#retrieve-payment-status)
+    - [Handling Webhook Data](#handling-webhook-data)
 - [Error Handling](#error-handling)
 - [API Response Structures](#api-response-structures)
-  - [Create Payment Response](#create-payment-response)
-  - [Payment Status Response](#payment-status-response)
-  - [Response Methods](#response-methods)
+    - [Create Payment Response](#create-payment-response)
+    - [Payment Status Response](#payment-status-response)
+    - [Response Methods](#response-methods)
 - [Security Considerations](#security-considerations)
-  - [Credential Management](#credential-management)
-  - [HTTPS Requirements](#https-requirements)
-  - [Test Card Numbers](#test-card-numbers)
+    - [Credential Management](#credential-management)
+    - [HTTPS Requirements](#https-requirements)
+    - [Test Card Numbers](#test-card-numbers)
 - [Testing](#testing)
 - [Contributing](#contributing)
 - [Contributors](#contributors)
@@ -105,26 +105,25 @@ $amount = 100.00;
 
 $payment_details = OrderData::make($order_id, $amount);
 
-// You can chain methods to set other information. All available methods are as follows
+// You can chain methods to set other information. All available methods are as follows:
 $payment_details->setOrderCurrency('MVR')
-				        ->setOrderDescription('Test Order')
-	              ->setMerchantAddressLine1('Sample, Majeedhee Magu')
-	              ->setMerchantEmail('merchant@example.mv')
-	              ->setMerchantLogo('https://example.mv/logo.svg')
-	              ->setMerchantName('Merchant Name')
-	              ->setMerchantPhone('1234567890')
-	              ->setMerchantUrl('https://example.mv')
-	              // return url is important though not required
-	              // this is the url the gateway will redirect user after paym
-	              ->setReturnUrl('https://example.mv/order123/process')
-	              ->setCancelUrl('https://example.mv/order123/process')
-	              ->setRedirectMerchantUrl('https://example.mv/order123/process')
-	              ->setWebHookUrl('https://example.mv/webhook')
-	              ->setRetryAttemptCount(3);
-
+                ->setOrderDescription('Test Order')
+                ->setMerchantAddressLine1('Sample, Majeedhee Magu')
+                ->setMerchantEmail('merchant@example.mv')
+                ->setMerchantLogo('https://example.mv/logo.svg')
+                ->setMerchantName('Merchant Name')
+                ->setMerchantPhone('1234567890')
+                ->setMerchantUrl('https://example.mv')
+                // Return URL is important though not required
+                // This is the URL the gateway will redirect the user to after payment
+                ->setReturnUrl('https://example.mv/order123/process')
+                ->setCancelUrl('https://example.mv/order123/process')
+                ->setRedirectMerchantUrl('https://example.mv/order123/process')
+                ->setWebHookUrl('https://example.mv/webhook')
+                ->setRetryAttemptCount(3);
 ```
 
-Send the request with the data.
+Send the request with the data:
 
 ```php
 use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
@@ -138,22 +137,21 @@ try {
 
     // Store success indicator for later verification
     // You may store it in your transaction or order record.
-    // This will be used later to verify paymen
+    // This will be used later to verify payment
 
 } catch (Exception $e) {
     // Handle error appropriately
     echo $e->getMessage();
 }
-
 ```
 
 **Important:** Save the `successIndicator` in your database for later verification after redirection.
 
 ### Redirect to MIB Checkout
 
-Once you have the session ID, redirect user to the below page. You will need to update the [`sandbox.gateway.mastercard.com`](http://sandbox.gateway.mastercard.com) to appropriate url and also send the session ID to the view. This view will automatically redirect user to the MIB Global Pay payment page.
+Once you have the session ID, redirect the user to the page below. You will need to update the [`sandbox.gateway.mastercard.com`](http://sandbox.gateway.mastercard.com) to the appropriate URL and also send the session ID to the view. This view will automatically redirect the user to the MIB Global Pay payment page.
 
-```php
+```html
 <!doctype html>
 <html>
 <head>
@@ -176,11 +174,9 @@ Once you have the session ID, redirect user to the below page. You will need to 
 
         // Redirect user to the payment page
         Checkout.showPaymentPage();
-
     </script>
 </body>
 </html>
-
 ```
 
 ### Handle Payment Completion
@@ -189,17 +185,16 @@ After the payment process, MIB will redirect the user to the `return_url` you pr
 
 ```php
 // Get the result indicator from the redirect
-$return_data = HostedCheckoutReturnData::fromArray($_GET)
+$return_data = HostedCheckoutReturnData::fromArray($_GET);
 $result_indicator = $return_data->getResultIndicator();
 
 // Retrieve the stored success indicator
 // Verify payment result
 if ($result_indicator && $result_indicator == $success_indicator) {
     // Payment was successful
-    // Normally you should make a get request to get order details
-    // to confirm the payment before marking order as paid
+    // Normally you should make a GET request to get order details
+    // to confirm the payment before marking the order as paid
     echo "Payment was successful!";
-
 } else {
     // Payment failed or was cancelled
     echo "Payment was not successful.";
@@ -217,23 +212,22 @@ try {
     $response = $connector->getOrderDetails($order_reference);
     $response_data = $response->toDto();
 
-		// Available methods on dto
-		$response_data->getOrderStatus();
-		$response_data->getTotalCapturedAmount();
-		$response_data->getTransactions();
-		$response_data->getRawResponse();
-		$response_data->paymentSuccessfullyCaptured();
-		
-		// to mark the order as paid
-		if ($response_data->paymentSuccessfullyCaptured()) {
-			// mark order as paid
-		}
+    // Available methods on dto
+    $response_data->getOrderStatus();
+    $response_data->getTotalCapturedAmount();
+    $response_data->getTransactions();
+    $response_data->getRawResponse();
+    $response_data->paymentSuccessfullyCaptured();
+    
+    // To mark the order as paid
+    if ($response_data->paymentSuccessfullyCaptured()) {
+        // Mark order as paid
+    }
 
 } catch (Exception $e) {
     error_log('Failed to retrieve payment status: ' . $e->getMessage());
     echo "Could not retrieve payment status.";
 }
-
 ```
 
 **Best Practice:** Always verify payment status with the get order API for critical orders.
@@ -246,7 +240,7 @@ The webhook sends the successful transaction data to a predefined URL. You can u
 
 Since webhook notifications are sent as POST requests, your application must be able to accept POST requests at the specified endpoint.
 
-You can convert the webhook data into a response data object as shown below.
+You can convert the webhook data into a response data object as shown below:
 
 ```php
 $webhook_data = WebhookResponseData::fromArray($_POST, getallheaders());
@@ -270,58 +264,53 @@ The SDK may encounter various errors during API calls. Always implement proper e
 
 ```php
 try {
-
     $response = $client->transactions->create($payment_details->toArray());
     $response_data = json_decode($response->getBody()->getContents(), true);
     
 } catch (Exception $e) {
-
     // Log the error
     error_log('MIB Payment Error: ' . $e->getMessage());
-
 }
-
 ```
 
 ## API Response Structures
 
 ### Create Payment Response
 
-This is a typical response you will receive when you send create transaction request.
+This is a typical response you will receive when you send a create transaction request:
 
 ```php
 [
-		'checkoutMode' => 'WEBSITE',
-		'merchant' => 'YOURMERCHANTID',
-		'result' => 'SUCCESS',
+    'checkoutMode' => 'WEBSITE',
+    'merchant' => 'YOURMERCHANTID',
+    'result' => 'SUCCESS',
     'session' => [
         'id' => 'SESSION_abc123', // session id
-        'udpateStatus' => 'SUCCESS',
+        'updateStatus' => 'SUCCESS',
         'version' => 'fasdf3452'
     ],
     'successIndicator' => 'abc123def456'
 ]
-
 ```
 
 ### Payment Status Response
 
-This is a typical response you will receive to your return url.
+This is a typical response you will receive to your return URL:
 
 ```php
 [
-  'order' => 'ORD-9010047',
-  'resultIndicator' => '50addc325519453c',
-  'sessionVersion' => '1fasdf23f',
-  'checkoutVersion' => '1.0.0',
+    'order' => 'ORD-9010047',
+    'resultIndicator' => '50addc325519453c',
+    'sessionVersion' => '1fasdf23f',
+    'checkoutVersion' => '1.0.0',
 ]
 ```
 
-**Note:** order id is present because it was included the order id in the return url. If you did not include order id in the return url, order key will not be present.
+**Note:** The order ID is present because it was included in the return URL. If you did not include the order ID in the return URL, the order key will not be present.
 
 ### Response Methods
 
-All responses has the following methods available
+All responses have the following methods available:
 
 - getStatusCode(): returns int
 - getHeaders(): returns an array
@@ -348,7 +337,7 @@ All responses has the following methods available
 
 ### Test Card Numbers
 
-Use test card numbers provided by the bank.  Test cards will be listed in the documentation.
+Use test card numbers provided by the bank. Test cards will be listed in the documentation.
 
 ## Testing
 
@@ -365,11 +354,12 @@ composer test
 5. Submit a pull request
 
 ## Contributors
+
 - [Hussain Afeef](https://abunooh.com)
 
 ## License
 
-MIT License. See LICENSE file for details.
+MIT License.
 
 ---
 
