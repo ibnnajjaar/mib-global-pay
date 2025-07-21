@@ -117,6 +117,8 @@ $payment_details->setOrderCurrency('MVR')
                 // Return URL is important though not required
                 // This is the URL the gateway will redirect the user to after payment
                 ->setReturnUrl('https://example.mv/order123/process')
+                // NOTE: Although not documented, the redirect page throws errors if the cancel URL is missing.
+                // It’s recommended to set a cancel URL (usually same as the return URL) to avoid this issue.
                 ->setCancelUrl('https://example.mv/order123/process')
                 ->setRedirectMerchantUrl('https://example.mv/order123/process')
                 ->setWebHookUrl('https://example.mv/webhook')
