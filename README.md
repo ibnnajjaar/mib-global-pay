@@ -7,6 +7,13 @@
 
 A Framework-agnostic PHP SDK for integrating with MIB Global Pay – enabling merchants to initiate payments and retrieve payment statuses using a clean, developer-friendly interface.
 
+> This SDK targets the Hosted Checkout integration of the Mastercard Payment Gateway (MPGS).
+>
+> What is Hosted Checkout? Hosted Checkout is a gateway-managed, PCI-compliant checkout page that you redirect shoppers to for entering payment details. The gateway collects and processes sensitive card data on its own secure pages, then redirects the shopper back to your site with the payment result. This reduces your PCI scope and simplifies compliance while keeping your app focused on order creation and result handling.
+>
+> Further reading: See the official MPGS Hosted Checkout documentation:
+> https://test-mib.mtf.gateway.mastercard.com/api/documentation/integrationGuidelines/hostedCheckout/integrationModelHostedCheckout.html?locale=en_US
+
 ## Table of Contents
 
 - [Requirements](#requirements)
@@ -146,7 +153,7 @@ try {
     echo $e->getMessage();
 }
 ```
-
+For further information, see the [API documentation: Initiate Checkout](https://test-mib.mtf.gateway.mastercard.com/api/documentation/apiDocumentation/rest-json/version/latest/operation/Hosted%20Checkout%3a%20Initiate%20Checkout.html?locale=en_US).
 **Important:** Save the `successIndicator` in your database for later verification after redirection.
 
 ### Redirect to MIB Checkout
@@ -180,6 +187,7 @@ Once you have the session ID, redirect the user to the page below. You will need
 </body>
 </html>
 ```
+For further information, see the [Documentation: Implementing the Hosted Payment Page](https://test-mib.mtf.gateway.mastercard.com/api/documentation/integrationGuidelines/hostedCheckout/implementingTheHostedPaymentPage.html?locale=en_US).
 
 ### Handle Payment Completion
 
@@ -202,6 +210,7 @@ if ($result_indicator && $result_indicator == $success_indicator) {
     echo "Payment was not successful.";
 }
 ```
+For further information, see the [Documentation: Interpreting the Response](https://test-mib.mtf.gateway.mastercard.com/api/documentation/integrationGuidelines/hostedCheckout/interpretingTheResponse.html?locale=en_US).
 
 ### Retrieve Payment Status
 
@@ -232,6 +241,7 @@ try {
 }
 ```
 
+For further information, see the [API documentation: Retrieve Order](https://test-mib.mtf.gateway.mastercard.com/api/documentation/apiDocumentation/rest-json/version/latest/operation/Transaction%3a%20%20Retrieve%20Order.html?locale=en_US).
 **Best Practice:** Always verify payment status with the get order API for critical orders.
 
 ### Handling Webhook Data
@@ -259,6 +269,7 @@ $webhook_data->getRawResponse();
 
 $webhook_data->paymentIsSuccessful(); // returns a boolean
 ```
+For further information, see the [Documentation: Webhook Notifications](https://test-mib.mtf.gateway.mastercard.com/api/documentation/integrationGuidelines/supportedFeatures/pickAdditionalFunctionality/webhookNotifications.html?locale=en_US).
 
 ## Error Handling
 
@@ -339,7 +350,7 @@ All responses have the following methods available:
 
 ### Test Card Numbers
 
-Use test card numbers provided by the bank. Test cards will be listed in the documentation.
+Use test card numbers provided by the bank. Test cards will be listed in the documentation. [Test Cards](https://test-mib.mtf.gateway.mastercard.com/api/documentation/integrationGuidelines/supportedFeatures/testAndGoLive.html?locale=en_US)
 
 ## Testing
 
