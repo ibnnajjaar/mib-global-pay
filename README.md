@@ -358,6 +358,29 @@ Use test card numbers provided by the bank. Test cards will be listed in the doc
 composer test
 ```
 
+### Run tests in Docker
+
+If you prefer to run the test suite in Docker (no local PHP or Composer required):
+
+```bash
+# Build the image
+docker compose build
+
+# Install dependencies inside the container (if vendor is not present or is outdated)
+docker compose run --rm php composer install
+
+# Run PHPUnit
+# Option A: Use the dedicated 'test' service
+docker compose run --rm test
+
+# Option B: Run via the php service (overriding the command)
+docker compose run --rm php vendor/bin/phpunit -c phpunit.xml --colors=always
+```
+
+## Changelog
+
+See CHANGELOG.md for release notes: [CHANGELOG.md](./CHANGELOG.md)
+
 ## Contributing
 
 1. Fork the repository

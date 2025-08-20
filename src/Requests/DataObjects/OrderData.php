@@ -11,6 +11,7 @@ class OrderData extends BaseOrderData
     use HasUrl;
 
     private $description = null;
+    private $order_reference = null;
 
     private $merchant_address_line1 = null;
     private $merchant_email = null;
@@ -44,6 +45,7 @@ class OrderData extends BaseOrderData
             $data['amount'] ?? null
         )
             ->setOrderDescription($data['description'] ?? null)
+            ->setOrderReference($data['order_reference'] ?? null)
             ->setReturnUrl($data['return_url'] ?? null)
             ->setMerchantAddressLine1($data['merchant_address_line1'] ?? null)
             ->setMerchantEmail($data['merchant_email'] ?? null)
@@ -60,6 +62,11 @@ class OrderData extends BaseOrderData
     public function getOrderDescription(): ?string
     {
         return $this->description;
+    }
+
+    public function getOrderReference(): ?string
+    {
+        return $this->order_reference;
     }
 
     public function getReturnUrl()
@@ -138,6 +145,27 @@ class OrderData extends BaseOrderData
         $this->description = $description;
         return $this;
     }
+
+    /**
+     * @param string|null $order_reference
+     * @return self
+     * @throws \InvalidArgumentException
+     */
+    public function setOrderReference(?string $order_reference = null): self
+    {
+        if (empty($order_reference)) {
+            $this->order_reference = null;
+            return $this;
+        }
+
+        if (strlen($order_reference) > 255) {
+            throw new \InvalidArgumentException('Order reference cannot exceed 255 characters');
+        }
+
+        $this->order_reference = $order_reference;
+        return $this;
+    }
+
 
     /**
      * @param mixed $return_url

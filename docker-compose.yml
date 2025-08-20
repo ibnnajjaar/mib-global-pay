@@ -4,3 +4,12 @@ services:
         platform: linux/amd64  # Optional for Mac M1/M2 compatibility
         volumes:
             - .:/app
+        working_dir: /app
+
+    test:
+        build: .
+        platform: linux/amd64  # Optional for Mac M1/M2 compatibility
+        volumes:
+            - .:/app
+        working_dir: /app
+        command: ["vendor/bin/phpunit", "-c", "phpunit.xml", "--colors=always"]

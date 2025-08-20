@@ -34,6 +34,7 @@ class CreateTransactionRequest extends Request
                 'amount' => $this->order_data->getOrderAmount(),
                 'currency' => $this->order_data->getOrderCurrency(),
                 'description' => $this->order_data->getOrderDescription(),
+                'reference' => $this->order_data->getOrderReference(),
                 'custom' => null,
                 'notificationUrl' => $this->order_data->getWebHookUrl(),
             ],

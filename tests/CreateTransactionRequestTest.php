@@ -18,6 +18,7 @@ class CreateTransactionRequestTest extends TestCase
         return OrderData::make('order123', 100.50)
                         ->setOrderCurrency('USD')
                         ->setOrderDescription('Test Order')
+                        ->setOrderReference('reference-order-123')
                         ->setWebHookUrl('https://webhook.url')
                         ->setCancelUrl('https://cancel.url')
                         ->setMerchantAddressLine1('123 Main St')
@@ -109,6 +110,7 @@ class CreateTransactionRequestTest extends TestCase
                 'description'     => 'Test Order',
                 'custom'          => null,
                 'notificationUrl' => 'https://webhook.url',
+                'reference' => 'reference-order-123'
             ],
             'interaction'  => [
                 'operation'           => 'PURCHASE',
