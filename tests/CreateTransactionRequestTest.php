@@ -105,10 +105,9 @@ class CreateTransactionRequestTest extends TestCase
             'apiOperation' => 'INITIATE_CHECKOUT',
             'order'        => [
                 'id'              => 'order123',
-                'amount'          => 100.50,
+                'amount'          => '100.50',
                 'currency'        => 'USD',
                 'description'     => 'Test Order',
-                'custom'          => null,
                 'notificationUrl' => 'https://webhook.url',
                 'reference' => 'reference-order-123'
             ],

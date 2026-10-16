@@ -2,13 +2,16 @@
 
 namespace IbnNajjaar\MIBGlobalPay\Requests\DataObjects;
 
+use IbnNajjaar\MIBGlobalPay\Support\Amount;
 use IbnNajjaar\MIBGlobalPay\Contracts\IsOrderData;
+use IbnNajjaar\MIBGlobalPay\Support\Constants\InteractionOperation;
 
 abstract class BaseOrderData implements IsOrderData
 {
     private $order_id;
     private $amount;
     private $currency = 'MVR';
+    private $interaction_operation = InteractionOperation::PURCHASE;
 
     public function __construct(
         string $order_id,
@@ -33,30 +36,16 @@ abstract class BaseOrderData implements IsOrderData
             throw new \InvalidArgumentException('Order ID must be a string or number');
         }
 
+        if (strlen((string) $order_id) > 40) {
+            throw new \InvalidArgumentException('Order ID cannot exceed 40 characters');
+        }
+
         $this->order_id = $order_id;
     }
 
     public function setOrderAmount(?float $amount = null)
     {
-        if ($amount === null) {
-            throw new \InvalidArgumentException('Amount is required');
-        }
-
-        if (!is_numeric($amount)) {
-            throw new \InvalidArgumentException('Amount must be numeric');
-        }
-
-        if ($amount <= 0) {
-            throw new \InvalidArgumentException('Amount must be greater than 0');
-        }
-
-        $amount_str = rtrim(rtrim((string) $amount, '0'), '.');
-        if (strpos($amount_str, '.') !== false) {
-            $decimal_part = substr($amount_str, strpos($amount_str, '.') + 1);
-            if (strlen($decimal_part) > 2) {
-                throw new \InvalidArgumentException('Amount cannot have more than 2 decimal places');
-            }
-        }
+        Amount::validate($amount);
 
         $this->amount = $amount;
     }
@@ -82,9 +71,26 @@ abstract class BaseOrderData implements IsOrderData
         return $this;
     }
 
+    /**
+     * The Hosted Checkout operation: PURCHASE (default), AUTHORIZE (capture later), VERIFY or NONE.
+     *
+     * @throws \InvalidArgumentException
+     */
+    public function setInteractionOperation(string $operation): self
+    {
+        $operation = strtoupper(trim($operation));
+
+        if (!in_array($operation, InteractionOperation::all(), true)) {
+            throw new \InvalidArgumentException('Interaction operation must be one of: ' . implode(', ', InteractionOperation::all()));
+        }
+
+        $this->interaction_operation = $operation;
+        return $this;
+    }
+
     public function getInteractionOperation(): string
     {
-        return 'PURCHASE';
+        return $this->interaction_operation;
     }
 
     public function getOrderAmount(): float
@@ -100,16 +106,5 @@ abstract class BaseOrderData implements IsOrderData
     public function getOrderId(): string
     {
         return $this->order_id;
-    }
-
-    private function validateUrl(string $url, string $fieldName)
-    {
-        if (empty($url)) {
-            throw new \InvalidArgumentException("$fieldName is required");
-        }
-
-        if (!filter_var($url, FILTER_VALIDATE_URL)) {
-            throw new \InvalidArgumentException("$fieldName must be a valid URL");
-        }
     }
 }

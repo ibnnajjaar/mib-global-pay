@@ -64,4 +64,23 @@ final class Arr
     {
         return is_numeric($value) ? (float) $value : null;
     }
+
+    /**
+     * Recursively remove null values, then arrays left empty.
+     */
+    public static function filterNull(array $data): array
+    {
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $value = self::filterNull($value);
+                $data[$key] = $value;
+            }
+
+            if ($value === null || $value === []) {
+                unset($data[$key]);
+            }
+        }
+
+        return $data;
+    }
 }

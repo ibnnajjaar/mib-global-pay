@@ -2,8 +2,9 @@
 
 namespace IbnNajjaar\MIBGlobalPay\Requests;
 
+use IbnNajjaar\MIBGlobalPay\Support\Arr;
+use IbnNajjaar\MIBGlobalPay\Support\Amount;
 use IbnNajjaar\MIBGlobalPay\Support\Request;
-use IbnNajjaar\MIBGlobalPay\Contracts\IsOrderData;
 use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
 use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\BaseOrderData;
 use IbnNajjaar\MIBGlobalPay\Responses\DataObjects\CheckoutSessionResponseData;
@@ -27,35 +28,55 @@ class CreateTransactionRequest extends Request
 
     public function defaultData(): array
     {
-        return [
+        $order_data = $this->order_data;
+        $is_order_data = $order_data instanceof OrderData;
+
+        $data = [
             'apiOperation' => 'INITIATE_CHECKOUT',
             'order' => [
-                'id' => $this->order_data->getOrderId(),
-                'amount' => $this->order_data->getOrderAmount(),
-                'currency' => $this->order_data->getOrderCurrency(),
-                'description' => $this->order_data->getOrderDescription(),
-                'reference' => $this->order_data->getOrderReference(),
-                'custom' => null,
-                'notificationUrl' => $this->order_data->getWebHookUrl(),
+                'id' => $order_data->getOrderId(),
+                'amount' => Amount::format($order_data->getOrderAmount()),
+                'currency' => $order_data->getOrderCurrency(),
+                'description' => $order_data->getOrderDescription(),
+                'reference' => $order_data->getOrderReference(),
+                'custom' => $is_order_data ? $order_data->getCustomFields() : null,
+                'notificationUrl' => $order_data->getWebHookUrl(),
             ],
             'interaction' => [
-                'operation' => 'PURCHASE',
-                'cancelUrl' => $this->order_data->getCancelUrl(),
+                'operation' => $order_data->getInteractionOperation(),
+                'cancelUrl' => $order_data->getCancelUrl(),
                 'merchant' => [
                     'address' => [
-                        'line1' => $this->order_data->getMerchantAddressLine1(),
+                        'line1' => $order_data->getMerchantAddressLine1(),
                     ],
-                    'email' => $this->order_data->getMerchantEmail(),
-                    'logo' => $this->order_data->getMerchantLogoUrl(),
-                    'name' => $this->order_data->getMerchantName(),
-                    'phone' => $this->order_data->getMerchantPhone(),
-                    'url' => $this->order_data->getMerchantUrl(),
+                    'email' => $order_data->getMerchantEmail(),
+                    'logo' => $order_data->getMerchantLogoUrl(),
+                    'name' => $order_data->getMerchantName(),
+                    'phone' => $order_data->getMerchantPhone(),
+                    'url' => $order_data->getMerchantUrl(),
                 ],
-                'redirectMerchantUrl' => $this->order_data->getRedirectMerchantUrl(),
-                'retryAttemptCount' => $this->order_data->getRetryAttemptCount(),
-                'returnUrl' => $this->order_data->getReturnUrl(),
+                'redirectMerchantUrl' => $order_data->getRedirectMerchantUrl(),
+                'retryAttemptCount' => $order_data->getRetryAttemptCount(),
+                'returnUrl' => $order_data->getReturnUrl(),
+                'locale' => $is_order_data ? $order_data->getLocale() : null,
+                'action' => [
+                    '3DSecure' => $is_order_data ? $order_data->getThreeDSecureAction() : null,
+                ],
+                'displayControl' => [
+                    'cardSecurityCode' => $is_order_data ? $order_data->getCardSecurityCodeDisplay() : null,
+                ],
+            ],
+            'transaction' => [
+                'reference' => $is_order_data ? $order_data->getTransactionReference() : null,
+                'source' => $is_order_data ? $order_data->getTransactionSource() : null,
             ],
         ];
+
+        if ($is_order_data && $order_data->getExtraFields()) {
+            $data = array_replace_recursive($data, $order_data->getExtraFields());
+        }
+
+        return Arr::filterNull($data);
     }
 
     public function getResponseDataClass(): ?string

@@ -24,5 +24,10 @@ trait HasUrl
         if (!filter_var($url, FILTER_VALIDATE_URL)) {
             throw new \InvalidArgumentException("$fieldName must be a valid URL");
         }
+
+        // The gateway forbids the javascript scheme
+        if (strtolower((string) parse_url($url, PHP_URL_SCHEME)) === 'javascript') {
+            throw new \InvalidArgumentException("$fieldName must be a valid URL");
+        }
     }
 }

@@ -25,6 +25,20 @@ class OrderData extends BaseOrderData
     private $webhook_url = null;
     private $cancel_url = null;
 
+    private $custom_fields = [];
+    private $three_d_secure_action = null;
+    private $card_security_code_display = null;
+    private $locale = null;
+    private $transaction_source = null;
+    private $transaction_reference = null;
+    private $extra_fields = [];
+
+    private const THREE_D_SECURE_ACTIONS = ['BYPASS', 'MANDATORY', 'USE_GATEWAY_RECOMMENDATION'];
+    private const CARD_SECURITY_CODE_DISPLAY_MODES = ['MANDATORY', 'OPTIONAL'];
+    private const TRANSACTION_SOURCES = [
+        'CALL_CENTRE', 'CARD_PRESENT', 'INTERNET', 'MAIL_ORDER', 'MERCHANT', 'MOTO', 'TELEPHONE_ORDER', 'VOICE_RESPONSE',
+    ];
+
     public function __construct(
         $order_id,
         $amount
@@ -40,10 +54,19 @@ class OrderData extends BaseOrderData
 
     public static function fromArray(array $data): self
     {
-        return self::make(
-            $data['order_id'] ?? null,
-            $data['amount'] ?? null
+        if (!isset($data['order_id']) || $data['order_id'] === '') {
+            throw new \InvalidArgumentException('order_id is required');
+        }
+
+        if (!isset($data['amount']) || $data['amount'] === '') {
+            throw new \InvalidArgumentException('amount is required');
+        }
+
+        $order = self::make(
+            (string) $data['order_id'],
+            $data['amount']
         )
+            ->setOrderCurrency($data['currency'] ?? null)
             ->setOrderDescription($data['description'] ?? null)
             ->setOrderReference($data['order_reference'] ?? null)
             ->setReturnUrl($data['return_url'] ?? null)
@@ -56,7 +79,23 @@ class OrderData extends BaseOrderData
             ->setRedirectMerchantUrl($data['redirect_merchant_url'] ?? null)
             ->setRetryAttemptCount($data['retry_attempt_count'] ?? 1)
             ->setWebhookUrl($data['webhook_url'] ?? null)
-            ->setCancelUrl($data['cancel_url'] ?? null);
+            ->setCancelUrl($data['cancel_url'] ?? null)
+            ->setThreeDSecureAction($data['three_d_secure_action'] ?? null)
+            ->setCardSecurityCodeDisplay($data['card_security_code_display'] ?? null)
+            ->setLocale($data['locale'] ?? null)
+            ->setTransactionSource($data['transaction_source'] ?? null)
+            ->setTransactionReference($data['transaction_reference'] ?? null)
+            ->setExtraFields($data['extra_fields'] ?? []);
+
+        if (isset($data['interaction_operation'])) {
+            $order->setInteractionOperation($data['interaction_operation']);
+        }
+
+        foreach ($data['custom_fields'] ?? [] as $key => $value) {
+            $order->setCustomField((string) $key, (string) $value);
+        }
+
+        return $order;
     }
 
     public function getOrderDescription(): ?string
@@ -138,8 +177,8 @@ class OrderData extends BaseOrderData
             return $this;
         }
 
-        if (strlen($description) > 255) {
-            throw new \InvalidArgumentException('Description cannot exceed 255 characters');
+        if (strlen($description) > 127) {
+            throw new \InvalidArgumentException('Description cannot exceed 127 characters');
         }
 
         $this->description = $description;
@@ -158,8 +197,8 @@ class OrderData extends BaseOrderData
             return $this;
         }
 
-        if (strlen($order_reference) > 255) {
-            throw new \InvalidArgumentException('Order reference cannot exceed 255 characters');
+        if (strlen($order_reference) > 40) {
+            throw new \InvalidArgumentException('Order reference cannot exceed 40 characters');
         }
 
         $this->order_reference = $order_reference;
@@ -203,9 +242,19 @@ class OrderData extends BaseOrderData
         return $this;
     }
 
-    // setMerchantName, setMerchantEmail, setMerchantLogo, setMerchantPhone, setMerchantUrl, setRedirectMerchantUrl methods
+    /**
+     * The name of your business shown to the payer (max 40 characters).
+     * The gateway API marks interaction.merchant.name as required; set it unless
+     * your merchant profile provides a default.
+     *
+     * @throws \InvalidArgumentException
+     */
     public function setMerchantName(?string $merchant_name): self
     {
+        if ($merchant_name !== null && strlen($merchant_name) > 40) {
+            throw new \InvalidArgumentException('Merchant name cannot exceed 40 characters');
+        }
+
         $this->merchant_name = $merchant_name;
         return $this;
     }
@@ -287,5 +336,161 @@ class OrderData extends BaseOrderData
 
         $this->retry_attempt_count = $retry_attempt_count;
         return $this;
+    }
+
+    /**
+     * Sent as order.custom.{key}. Up to 50 fields.
+     *
+     * @throws \InvalidArgumentException
+     */
+    public function setCustomField(string $key, string $value): self
+    {
+        if (!preg_match('/^[A-Za-z0-9]{1,99}$/', $key)) {
+            throw new \InvalidArgumentException('Custom field key must be 1-99 alphanumeric characters');
+        }
+
+        if ($value === '' || strlen($value) > 250) {
+            throw new \InvalidArgumentException('Custom field value must be 1-250 characters');
+        }
+
+        if (!array_key_exists($key, $this->custom_fields) && count($this->custom_fields) >= 50) {
+            throw new \InvalidArgumentException('Cannot set more than 50 custom fields');
+        }
+
+        $this->custom_fields[$key] = $value;
+        return $this;
+    }
+
+    public function getCustomFields(): array
+    {
+        return $this->custom_fields;
+    }
+
+    /**
+     * Sent as interaction.action.3DSecure: BYPASS, MANDATORY or USE_GATEWAY_RECOMMENDATION.
+     *
+     * @throws \InvalidArgumentException
+     */
+    public function setThreeDSecureAction(?string $action): self
+    {
+        $this->three_d_secure_action = $this->enumValue($action, self::THREE_D_SECURE_ACTIONS, '3-D Secure action');
+        return $this;
+    }
+
+    public function getThreeDSecureAction(): ?string
+    {
+        return $this->three_d_secure_action;
+    }
+
+    /**
+     * Sent as interaction.displayControl.cardSecurityCode: OPTIONAL or MANDATORY.
+     *
+     * @throws \InvalidArgumentException
+     */
+    public function setCardSecurityCodeDisplay(?string $mode): self
+    {
+        $this->card_security_code_display = $this->enumValue($mode, self::CARD_SECURITY_CODE_DISPLAY_MODES, 'Card security code display');
+        return $this;
+    }
+
+    public function getCardSecurityCodeDisplay(): ?string
+    {
+        return $this->card_security_code_display;
+    }
+
+    /**
+     * Sent as interaction.locale, e.g. "en_US" or "fr-CA" (2-5 characters).
+     *
+     * @throws \InvalidArgumentException
+     */
+    public function setLocale(?string $locale): self
+    {
+        if ($locale === null || $locale === '') {
+            $this->locale = null;
+            return $this;
+        }
+
+        if (!preg_match('/^[A-Za-z]{2}([_-][A-Za-z]{2})?$/', $locale)) {
+            throw new \InvalidArgumentException('Locale must be a language identifier like "en" or "en_US"');
+        }
+
+        $this->locale = $locale;
+        return $this;
+    }
+
+    public function getLocale(): ?string
+    {
+        return $this->locale;
+    }
+
+    /**
+     * Sent as transaction.source, e.g. INTERNET or MOTO. Requires permission on your merchant profile.
+     *
+     * @throws \InvalidArgumentException
+     */
+    public function setTransactionSource(?string $source): self
+    {
+        $this->transaction_source = $this->enumValue($source, self::TRANSACTION_SOURCES, 'Transaction source');
+        return $this;
+    }
+
+    public function getTransactionSource(): ?string
+    {
+        return $this->transaction_source;
+    }
+
+    /**
+     * Sent as transaction.reference (max 40 characters).
+     *
+     * @throws \InvalidArgumentException
+     */
+    public function setTransactionReference(?string $reference): self
+    {
+        if ($reference === null || $reference === '') {
+            $this->transaction_reference = null;
+            return $this;
+        }
+
+        if (strlen($reference) > 40) {
+            throw new \InvalidArgumentException('Transaction reference cannot exceed 40 characters');
+        }
+
+        $this->transaction_reference = $reference;
+        return $this;
+    }
+
+    public function getTransactionReference(): ?string
+    {
+        return $this->transaction_reference;
+    }
+
+    /**
+     * Escape hatch for Initiate Checkout fields the SDK does not model yet.
+     * Deep-merged last into the request payload, so it overrides SDK fields
+     * (a null value removes a field). Use at your own risk.
+     */
+    public function setExtraFields(array $fields): self
+    {
+        $this->extra_fields = $fields;
+        return $this;
+    }
+
+    public function getExtraFields(): array
+    {
+        return $this->extra_fields;
+    }
+
+    private function enumValue(?string $value, array $allowed, string $field_name): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $value = strtoupper(trim($value));
+        if (!in_array($value, $allowed, true)) {
+            throw new \InvalidArgumentException("$field_name must be one of: " . implode(', ', $allowed));
+        }
+
+        return $value;
     }
 }
