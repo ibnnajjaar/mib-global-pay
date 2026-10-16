@@ -4,10 +4,15 @@ namespace IbnNajjaar\MIBGlobalPay;
 
 use IbnNajjaar\MIBGlobalPay\Support\Response;
 use IbnNajjaar\MIBGlobalPay\Support\Connector;
+use IbnNajjaar\MIBGlobalPay\Requests\VoidRequest;
+use IbnNajjaar\MIBGlobalPay\Requests\RefundRequest;
+use IbnNajjaar\MIBGlobalPay\Requests\CaptureRequest;
 use IbnNajjaar\MIBGlobalPay\Requests\GetTransactionRequest;
 use IbnNajjaar\MIBGlobalPay\Exceptions\MIBGlobalPayException;
 use IbnNajjaar\MIBGlobalPay\Requests\CreateTransactionRequest;
 use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\BaseOrderData;
+use IbnNajjaar\MIBGlobalPay\Requests\RetrieveTransactionRequest;
+use IbnNajjaar\MIBGlobalPay\Requests\UpdateAuthorizationRequest;
 
 class MIBGlobalPayConnector extends Connector
 {
@@ -62,6 +67,80 @@ class MIBGlobalPayConnector extends Connector
     public function getOrderDetails(string $order_reference): Response
     {
         return $this->send(new GetTransactionRequest($order_reference));
+    }
+
+    /**
+     * Refund a captured or purchased amount, in full or in part.
+     * $transaction_id is a new ID, unique within the order (see TransactionId::generate()).
+     *
+     * @param float|int|string $amount
+     * @throws MIBGlobalPayException
+     */
+    public function refund(
+        string $order_id,
+        string $transaction_id,
+        $amount,
+        string $currency,
+        ?string $target_transaction_id = null,
+        ?string $reference = null
+    ): Response {
+        return $this->send(new RefundRequest($order_id, $transaction_id, $amount, $currency, $target_transaction_id, $reference));
+    }
+
+    /**
+     * Cancel an authorization, capture or payment before settlement. After settlement, refund instead.
+     *
+     * @throws MIBGlobalPayException
+     */
+    public function void(
+        string $order_id,
+        string $transaction_id,
+        string $target_transaction_id,
+        ?string $reference = null
+    ): Response {
+        return $this->send(new VoidRequest($order_id, $transaction_id, $target_transaction_id, $reference));
+    }
+
+    /**
+     * Capture funds from an authorization.
+     *
+     * @param float|int|string $amount
+     * @throws MIBGlobalPayException
+     */
+    public function capture(
+        string $order_id,
+        string $transaction_id,
+        $amount,
+        string $currency,
+        ?string $reference = null
+    ): Response {
+        return $this->send(new CaptureRequest($order_id, $transaction_id, $amount, $currency, $reference));
+    }
+
+    /**
+     * Change the authorized amount, or extend the authorization when amount and currency are omitted.
+     *
+     * @param float|int|string|null $amount
+     * @throws MIBGlobalPayException
+     */
+    public function updateAuthorization(
+        string $order_id,
+        string $transaction_id,
+        $amount = null,
+        ?string $currency = null,
+        ?string $reference = null
+    ): Response {
+        return $this->send(new UpdateAuthorizationRequest($order_id, $transaction_id, $amount, $currency, $reference));
+    }
+
+    /**
+     * Retrieve a single transaction of an order.
+     *
+     * @throws MIBGlobalPayException
+     */
+    public function getTransactionDetails(string $order_id, string $transaction_id): Response
+    {
+        return $this->send(new RetrieveTransactionRequest($order_id, $transaction_id));
     }
 
     protected function getApiPassword(): string

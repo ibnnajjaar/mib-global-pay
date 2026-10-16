@@ -2,6 +2,7 @@
 
 namespace IbnNajjaar\MIBGlobalPay\Requests;
 
+use IbnNajjaar\MIBGlobalPay\Support\Path;
 use IbnNajjaar\MIBGlobalPay\Support\Request;
 use IbnNajjaar\MIBGlobalPay\Responses\DataObjects\OrderResponseData;
 
@@ -17,7 +18,7 @@ class GetTransactionRequest extends Request
 
     public function resolveEndpoint(): string
     {
-        return "order/{$this->order_reference}";
+        return 'order/' . Path::segment($this->order_reference);
     }
 
     public function getResponseDataClass(): ?string

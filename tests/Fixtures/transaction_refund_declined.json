@@ -1,0 +1,25 @@
+{
+    "merchant": "TESTMERCHANT",
+    "order": {
+        "amount": 100.00,
+        "currency": "MVR",
+        "id": "ORDER-1001",
+        "status": "CAPTURED",
+        "totalCapturedAmount": 100.00,
+        "totalRefundedAmount": 0.00
+    },
+    "response": {
+        "acquirerCode": "05",
+        "gatewayCode": "DECLINED"
+    },
+    "result": "FAILURE",
+    "timeOfRecord": "2026-10-02T10:00:00.000Z",
+    "transaction": {
+        "amount": 25.00,
+        "currency": "MVR",
+        "id": "refund-2",
+        "targetTransactionId": "1",
+        "type": "REFUND"
+    },
+    "version": "100"
+}
