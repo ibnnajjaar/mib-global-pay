@@ -3,13 +3,15 @@
 namespace IbnNajjaar\MIBGlobalPay\Support;
 
 use GuzzleHttp\Client as GuzzleClient;
-use GuzzleHttp\Exception\RequestException;
 use IbnNajjaar\MIBGlobalPay\Support\Traits\SendsRequests;
-use IbnNajjaar\MIBGlobalPay\Exceptions\MIBGlobalPayException;
 
 abstract class Connector
 {
     use SendsRequests;
+
+    /* @var GuzzleClient|null $http_client */
+    protected $http_client = null;
+    protected $timeout = 30;
 
     abstract protected function getApiPassword(): string;
     abstract protected function getMerchantId(): string;
@@ -19,6 +21,27 @@ abstract class Connector
     public function resolveBaseUrl(): string
     {
         return "https://{$this->getMerchantPortalUrl()}/api/rest/version/{$this->getApiVersion()}/merchant/{$this->getMerchantId()}/";
+    }
+
+    /**
+     * Use a custom Guzzle client, e.g. one with extra middleware or a mock handler.
+     * Base URL, authentication, headers and timeout are applied per request.
+     */
+    public function setHttpClient(GuzzleClient $client): self
+    {
+        $this->http_client = $client;
+        return $this;
+    }
+
+    public function setTimeout(int $seconds): self
+    {
+        $this->timeout = $seconds;
+        return $this;
+    }
+
+    public function getTimeout(): int
+    {
+        return $this->timeout;
     }
 
     protected function defaultHeaders(): array
@@ -39,11 +62,10 @@ abstract class Connector
 
     protected function getHttpClient(): GuzzleClient
     {
-        return new GuzzleClient([
-            'base_uri' => $this->resolveBaseUrl(),
-            'timeout' => 30,
-            'auth' => $this->defaultAuth(),
-            'headers' => $this->defaultHeaders(),
-        ]);
+        if ($this->http_client !== null) {
+            return $this->http_client;
+        }
+
+        return new GuzzleClient();
     }
 }

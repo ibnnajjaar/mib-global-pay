@@ -2,17 +2,19 @@
 
 namespace IbnNajjaar\MIBGlobalPay\Support\Traits;
 
-use GuzzleHttp\Client;
 use Psr\Http\Message\ResponseInterface;
 use GuzzleHttp\Exception\RequestException;
+use GuzzleHttp\Exception\TransferException;
 use IbnNajjaar\MIBGlobalPay\Support\Request;
 use IbnNajjaar\MIBGlobalPay\Support\Response;
+use IbnNajjaar\MIBGlobalPay\Exceptions\GatewayException;
 use IbnNajjaar\MIBGlobalPay\Exceptions\MIBGlobalPayException;
 
 trait SendsRequests
 {
     /**
      * @throws MIBGlobalPayException
+     * @throws GatewayException when the gateway responds with HTTP 4xx/5xx
      */
     public function send(Request $request): Response
     {
@@ -24,11 +26,24 @@ trait SendsRequests
 
             return $this->createResponse($response, $request->getResponseDataClass());
         } catch (RequestException $exception) {
+            if ($exception->hasResponse()) {
+                throw GatewayException::fromResponse($exception->getResponse(), null, $exception);
+            }
+
             throw new MIBGlobalPayException(
                 'HTTP request failed: ' . $exception->getMessage(),
-                $exception->getCode(),
+                0,
                 $exception
             );
+        } catch (TransferException $exception) {
+            // Connection errors and timeouts (Guzzle 7's ConnectException is not a RequestException)
+            throw new MIBGlobalPayException(
+                'HTTP request failed: ' . $exception->getMessage(),
+                0,
+                $exception
+            );
+        } catch (MIBGlobalPayException $exception) {
+            throw $exception;
         } catch (\Exception $exception) {
             throw new MIBGlobalPayException(
                 'Request failed: ' . $exception->getMessage(),
@@ -40,7 +55,10 @@ trait SendsRequests
 
     protected function buildRequestOptions(Request $request): array
     {
-        $options = [];
+        $options = [
+            'auth' => $this->defaultAuth(),
+            'timeout' => $this->timeout,
+        ];
 
         $options = $this->addQueryParameters($options, $request);
         $options = $this->addHeaders($options, $request);
@@ -80,26 +98,22 @@ trait SendsRequests
 
     protected function addHeaders(array $options, Request $request): array
     {
-        $headers = $request->getHeaders();
-        if (!empty($headers)) {
-            $options['headers'] = array_merge($this->defaultHeaders(), $headers);
-        }
+        $options['headers'] = array_merge($this->defaultHeaders(), $request->getHeaders());
 
         return $options;
     }
 
     protected function makeHttpRequest($client, Request $request, array $options): ResponseInterface
     {
-        $method = strtolower($request->getMethod());
-        $endpoint = $request->resolveEndpoint();
+        $url = $this->resolveBaseUrl() . $request->resolveEndpoint();
 
-        return $client->$method($endpoint, $options);
+        return $client->request(strtoupper($request->getMethod()), $url, $options);
     }
 
     /**
      * @throws MIBGlobalPayException
      */
-    protected function createResponse($httpResponse, string $response_data_class): Response
+    protected function createResponse($httpResponse, ?string $response_data_class): Response
     {
         return new Response($httpResponse, $response_data_class);
     }

@@ -4,7 +4,6 @@ namespace IbnNajjaar\MIBGlobalPay\Support\Traits;
 
 trait HasUrl
 {
-
     protected function trimUrl(?string &$url): void
     {
         if (is_string($url)) {

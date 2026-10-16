@@ -5,6 +5,7 @@ namespace IbnNajjaar\MIBGlobalPay\Support;
 use Psr\Http\Message\ResponseInterface;
 use GuzzleHttp\Psr7\Response as GuzzleResponse;
 use IbnNajjaar\MIBGlobalPay\Contracts\IsResponseData;
+use IbnNajjaar\MIBGlobalPay\Exceptions\GatewayException;
 use IbnNajjaar\MIBGlobalPay\Exceptions\MIBGlobalPayException;
 
 class Response
@@ -13,6 +14,7 @@ class Response
     protected $response;
     protected $response_data_class = null;
     protected $decoded_data = null;
+    protected $body = null;
 
     /**
      * @throws MIBGlobalPayException
@@ -43,16 +45,31 @@ class Response
 
     public function getBody(): string
     {
-        return $this->response->getBody()->getContents();
+        if ($this->body === null) {
+            $this->body = (string) $this->response->getBody();
+        }
+
+        return $this->body;
     }
 
     public function toArray(): array
     {
         if ($this->decoded_data === null) {
-            $this->decoded_data = json_decode($this->getBody(), true) ?? [];
+            $decoded = json_decode($this->getBody(), true);
+            $this->decoded_data = is_array($decoded) ? $decoded : [];
         }
 
         return $this->decoded_data;
+    }
+
+    /**
+     * The top-level "result" field (SUCCESS, FAILURE, PENDING, UNKNOWN, ERROR), if present.
+     */
+    public function getResult(): ?string
+    {
+        $result = $this->toArray()['result'] ?? null;
+
+        return is_scalar($result) ? (string) $result : null;
     }
 
     /**
@@ -64,6 +81,10 @@ class Response
     public function toDto(): IsResponseData
     {
         $this->throw();
+
+        if (!$this->response_data_class) {
+            throw new MIBGlobalPayException('This request has no response DTO');
+        }
 
         return call_user_func([$this->response_data_class, 'fromArray'], $this->toArray());
     }
@@ -79,14 +100,12 @@ class Response
     }
 
     /**
-     * @throws MIBGlobalPayException
+     * @throws GatewayException
      */
     public function throw(): self
     {
         if ($this->isFailed()) {
-            $data = $this->toArray();
-            $message = $data['error']['explanation'] ?? 'Request failed';
-            throw new MIBGlobalPayException($message, $this->getStatusCode());
+            throw GatewayException::fromResponse($this->response, $this->getBody());
         }
 
         return $this;

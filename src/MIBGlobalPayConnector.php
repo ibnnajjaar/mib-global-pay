@@ -2,12 +2,8 @@
 
 namespace IbnNajjaar\MIBGlobalPay;
 
-use GuzzleHttp\Client as GuzzleClient;
-use GuzzleHttp\Exception\RequestException;
-use IbnNajjaar\MIBGlobalPay\Support\Request;
 use IbnNajjaar\MIBGlobalPay\Support\Response;
 use IbnNajjaar\MIBGlobalPay\Support\Connector;
-use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
 use IbnNajjaar\MIBGlobalPay\Requests\GetTransactionRequest;
 use IbnNajjaar\MIBGlobalPay\Exceptions\MIBGlobalPayException;
 use IbnNajjaar\MIBGlobalPay\Requests\CreateTransactionRequest;
@@ -66,17 +62,6 @@ class MIBGlobalPayConnector extends Connector
     public function getOrderDetails(string $order_reference): Response
     {
         return $this->send(new GetTransactionRequest($order_reference));
-    }
-
-    private function normalizeOrderData($order_data): OrderData
-    {
-        if (is_array($order_data)) {
-            return OrderData::fromArray($order_data);
-        } elseif ($order_data instanceof OrderData) {
-            return $order_data;
-        } else {
-            throw new \InvalidArgumentException('Order data must be an array or OrderData instance');
-        }
     }
 
     protected function getApiPassword(): string
