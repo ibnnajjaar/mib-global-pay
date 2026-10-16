@@ -71,4 +71,16 @@ class HostedCheckoutReturnData implements IsResponseData
     {
         return Arr::string(Arr::get($this->raw_response ?? [], 'order'));
     }
+
+    /**
+     * Compare the returned resultIndicator with the successIndicator you stored
+     * when creating the checkout session (timing-safe). A match means the payment succeeded.
+     */
+    public function matchesSuccessIndicator(?string $success_indicator): bool
+    {
+        return is_string($this->result_indicator)
+            && is_string($success_indicator)
+            && $success_indicator !== ''
+            && hash_equals($success_indicator, $this->result_indicator);
+    }
 }

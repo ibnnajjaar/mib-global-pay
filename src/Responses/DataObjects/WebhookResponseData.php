@@ -4,6 +4,7 @@ namespace IbnNajjaar\MIBGlobalPay\Responses\DataObjects;
 
 use IbnNajjaar\MIBGlobalPay\Support\Arr;
 use IbnNajjaar\MIBGlobalPay\Contracts\IsResponseData;
+use IbnNajjaar\MIBGlobalPay\Exceptions\MIBGlobalPayException;
 
 class WebhookResponseData implements IsResponseData
 {
@@ -281,6 +282,28 @@ class WebhookResponseData implements IsResponseData
     public function isVoid(): bool
     {
         return $this->getTransaction()->isVoid();
+    }
+
+    /**
+     * Timing-safe comparison of the X-Notification-Secret header with your configured secret.
+     */
+    public function verifySecret(?string $expected_secret): bool
+    {
+        return is_string($this->notification_secret)
+            && $this->notification_secret !== ''
+            && is_string($expected_secret)
+            && $expected_secret !== ''
+            && hash_equals($expected_secret, $this->notification_secret);
+    }
+
+    /**
+     * @throws MIBGlobalPayException when the notification secret does not match
+     */
+    public function assertValidSecret(string $expected_secret): void
+    {
+        if (!$this->verifySecret($expected_secret)) {
+            throw new MIBGlobalPayException('Invalid webhook notification secret');
+        }
     }
 
     /**
