@@ -2,6 +2,7 @@
 
 namespace IbnNajjaar\MIBGlobalPay\Responses\DataObjects;
 
+use IbnNajjaar\MIBGlobalPay\Support\Arr;
 use IbnNajjaar\MIBGlobalPay\Contracts\IsResponseData;
 
 class HostedCheckoutReturnData implements IsResponseData
@@ -56,5 +57,18 @@ class HostedCheckoutReturnData implements IsResponseData
     public function getRawResponse(): ?array
     {
         return $this->raw_response;
+    }
+
+    public function getSessionVersion(): ?string
+    {
+        return Arr::string(Arr::get($this->raw_response ?? [], 'sessionVersion'));
+    }
+
+    /**
+     * Only present if you added an "order" parameter to your return URL.
+     */
+    public function getOrderId(): ?string
+    {
+        return Arr::string(Arr::get($this->raw_response ?? [], 'order'));
     }
 }

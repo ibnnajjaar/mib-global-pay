@@ -1,0 +1,84 @@
+{
+    "amount": 100.00,
+    "creationTime": "2026-10-01T08:15:30.000Z",
+    "currency": "MVR",
+    "description": "Test order",
+    "id": "ORDER-1001",
+    "merchant": "TESTMERCHANT",
+    "reference": "INV-1001",
+    "result": "SUCCESS",
+    "status": "PARTIALLY_REFUNDED",
+    "totalAuthorizedAmount": 100.00,
+    "totalCapturedAmount": 100.00,
+    "totalDisbursedAmount": 0.00,
+    "totalRefundedAmount": 30.00,
+    "transaction": [
+        {
+            "authentication": {
+                "3ds": {
+                    "transactionId": "4a1b5c8e-0000-0000-0000-000000000000"
+                }
+            },
+            "order": {
+                "id": "ORDER-1001",
+                "status": "AUTHENTICATED"
+            },
+            "result": "SUCCESS",
+            "timeOfRecord": "2026-10-01T08:16:02.000Z",
+            "transaction": {
+                "amount": 100.00,
+                "currency": "MVR",
+                "id": "auth-3ds-1",
+                "type": "AUTHENTICATION"
+            },
+            "version": "100"
+        },
+        {
+            "order": {
+                "id": "ORDER-1001",
+                "status": "CAPTURED"
+            },
+            "response": {
+                "acquirerCode": "00",
+                "gatewayCode": "APPROVED"
+            },
+            "result": "SUCCESS",
+            "timeOfRecord": "2026-10-01T08:16:10.000Z",
+            "transaction": {
+                "acquirer": {
+                    "id": "MIB_S2I"
+                },
+                "amount": 100.00,
+                "authorizationCode": "123456",
+                "currency": "MVR",
+                "id": "1",
+                "receipt": "627412345678",
+                "source": "INTERNET",
+                "type": "PAYMENT"
+            },
+            "version": "100"
+        },
+        {
+            "order": {
+                "id": "ORDER-1001",
+                "status": "PARTIALLY_REFUNDED"
+            },
+            "response": {
+                "acquirerCode": "00",
+                "gatewayCode": "APPROVED"
+            },
+            "result": "SUCCESS",
+            "timeOfRecord": "2026-10-02T10:00:00.000Z",
+            "transaction": {
+                "amount": 30.00,
+                "currency": "MVR",
+                "id": "refund-1",
+                "receipt": "627412345679",
+                "reference": "RMA-77",
+                "targetTransactionId": "1",
+                "type": "REFUND"
+            },
+            "version": "100"
+        }
+    ]
+}

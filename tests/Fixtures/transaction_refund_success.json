@@ -1,0 +1,34 @@
+{
+    "authorizationResponse": {
+        "stan": "12345"
+    },
+    "gatewayEntryPoint": "WEB_SERVICES_API",
+    "merchant": "TESTMERCHANT",
+    "order": {
+        "amount": 100.00,
+        "creationTime": "2026-10-01T08:15:30.000Z",
+        "currency": "MVR",
+        "id": "ORDER-1001",
+        "status": "PARTIALLY_REFUNDED",
+        "totalAuthorizedAmount": 100.00,
+        "totalCapturedAmount": 100.00,
+        "totalRefundedAmount": 25.00
+    },
+    "response": {
+        "acquirerCode": "00",
+        "gatewayCode": "APPROVED"
+    },
+    "result": "SUCCESS",
+    "timeOfRecord": "2026-10-02T10:00:00.000Z",
+    "transaction": {
+        "amount": 25.00,
+        "authorizationCode": "654321",
+        "currency": "MVR",
+        "id": "refund-1",
+        "receipt": "627412345679",
+        "reference": "RMA-77",
+        "targetTransactionId": "1",
+        "type": "REFUND"
+    },
+    "version": "100"
+}

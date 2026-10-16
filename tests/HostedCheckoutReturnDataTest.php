@@ -16,6 +16,17 @@ class HostedCheckoutReturnDataTest extends TestCase
         ;
     }
 
+    public function test_session_version_and_order_id()
+    {
+        $data = HostedCheckoutReturnData::fromArray($this->getResponseData() + ['order' => 'ORDER-1']);
+        $this->assertSame('1a0f9970309', $data->getSessionVersion());
+        $this->assertSame('ORDER-1', $data->getOrderId());
+
+        $data = HostedCheckoutReturnData::fromArray([]);
+        $this->assertNull($data->getSessionVersion());
+        $this->assertNull($data->getOrderId());
+    }
+
     public function getResponseData(): array
     {
         return [
