@@ -9,16 +9,21 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    name: PHP ${{ matrix.php-version }} Tests
+    name: PHP ${{ matrix.php-version }} Tests${{ matrix.dependencies == 'lowest' && ' (lowest deps)' || '' }}
 
     strategy:
       matrix:
         php-version: [7.2, 7.3, 7.4, 8.0, 8.1, 8.2, 8.3, 8.4]
+        dependencies: [highest]
+        include:
+          # Guarantees the guzzlehttp/guzzle ~6.0 support claim
+          - php-version: 7.2
+            dependencies: lowest
       fail-fast: false
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -27,31 +32,36 @@ jobs:
           extensions: mbstring, xml, ctype, json, curl
           coverage: xdebug
 
-      - name: Validate composer.json and composer.lock
-        run: composer validate --strict
+      - name: Validate composer.json
+        run: composer validate --strict --no-check-lock
 
       - name: Cache Composer packages
         id: composer-cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: vendor
-          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          key: ${{ runner.os }}-php-${{ matrix.php-version }}-${{ matrix.dependencies }}-${{ hashFiles('composer.json') }}
           restore-keys: |
-            ${{ runner.os }}-php-
+            ${{ runner.os }}-php-${{ matrix.php-version }}-${{ matrix.dependencies }}-
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress
+        if: matrix.dependencies == 'highest'
+        run: composer update --prefer-dist --no-progress
+
+      - name: Install lowest dependencies
+        if: matrix.dependencies == 'lowest'
+        run: composer update --prefer-dist --no-progress --prefer-lowest --prefer-stable
 
       - name: Run test suite
         run: |
-          if [[ "${{ startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '7.2' }}" == "true" ]]; then
+          if [[ "${{ startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '7.2' && matrix.dependencies == 'highest' }}" == "true" ]]; then
             vendor/bin/phpunit tests --coverage-clover=clover.xml --whitelist=src
           else
             vendor/bin/phpunit tests
           fi
 
       - name: Make code coverage badge
-        if: startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '7.2'
+        if: startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '7.2' && matrix.dependencies == 'highest'
         uses: timkrase/phpunit-coverage-badge@v1.2.1
         with:
           coverage_badge_path: .github/coverage.svg
