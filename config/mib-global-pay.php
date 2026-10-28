@@ -50,7 +50,7 @@ return [
         'path' => env('MIB_WEBHOOK_PATH', 'mib/webhook'),
         'domain' => env('MIB_WEBHOOK_DOMAIN'),
 
-        // Queue for ProcessNotification (open: env names are provisional).
+        // Queue connection and name for ProcessNotification (app defaults when unset).
         'queue' => env('MIB_WEBHOOK_QUEUE'),
         'connection' => env('MIB_WEBHOOK_CONNECTION'),
     ],

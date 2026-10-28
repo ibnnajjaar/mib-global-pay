@@ -401,7 +401,7 @@ It is auto-discovered through `extra.laravel.providers`. The core works without 
 - `Listeners\AutoReverseDoubleCapture` is always registered but does nothing unless `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=true`. When enabled, it queues `Jobs\ReverseCapture` after commit. That job voids, then refunds, with transaction IDs fixed at creation so a retry resends identical requests.
 - Blade `<x-mib-global-pay::checkout :session="$id" />` renders the Checkout.js page.
 
-**Provisional pipeline choices (need confirmation):**
+**Pipeline choices (decided after stage 6):**
 1. `PaymentFailed` fires for `NotCaptured` or `NotFound` only when the attempt is finished: either the triggering webhook transaction failed, or the attempt is past `expiresAt()`. Otherwise no event is fired.
 2. The return URL always verifies with the gateway, even when `resultIndicator` doesn't match. The match result is only returned to the host, as `indicatorMatched`.
 3. Refund and void notifications dispatch `RefundProcessed` / `VoidProcessed` once, then re-verify the order, which can produce `PaymentReversed`. AUTHORIZATION, VERIFY and other non-money-in transaction notifications are `Ignored`.
@@ -851,7 +851,7 @@ Shared types used in the payloads:
 | `webhook.path` | `MIB_WEBHOOK_PATH` | `mib/webhook` |
 | `webhook.domain` | `MIB_WEBHOOK_DOMAIN` | none (decided) |
 | `webhook.register_route` | `MIB_WEBHOOK_REGISTER_ROUTE` | `true` (decided; false + `Route::mibGlobalPayWebhook($uri)` for host-registered routes) |
-| `webhook.queue` / `webhook.connection` | `MIB_WEBHOOK_QUEUE` / `MIB_WEBHOOK_CONNECTION` | app default. Env names are provisional **(open)**. |
+| `webhook.queue` / `webhook.connection` | `MIB_WEBHOOK_QUEUE` / `MIB_WEBHOOK_CONNECTION` | app default (decided) |
 | `notification_store` | `MIB_NOTIFICATION_STORE` | `database` |
 | `approval.accept_approved_auto` | `MIB_ACCEPT_APPROVED_AUTO` | `false` |
 | `double_capture.auto_reverse` | `MIB_AUTO_REVERSE_DOUBLE_CAPTURE` | `false` |

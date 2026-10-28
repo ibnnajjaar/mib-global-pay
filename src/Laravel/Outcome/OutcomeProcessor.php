@@ -151,7 +151,7 @@ final readonly class OutcomeProcessor
 
             case VerificationStatus::NotCaptured:
             case VerificationStatus::NotFound:
-                // Provisional (see DESIGN-v2.md §6.2): only a finished attempt is reported as failed,
+                // Decided (DESIGN-v2.md §6.0): only a finished attempt is reported as failed,
                 // i.e. the triggering transaction failed, or the attempt is past expiresAt.
                 $failedTrigger = $n !== null && $n->transaction->isFailure();
                 $expired = $attempt->expiresAt() <= ($this->clock)();
