@@ -7,22 +7,14 @@ arch('no debugging helpers are left in the source')
     ->not->toBeUsed();
 
 arch('only the optional Laravel layer depends on the Laravel framework')
-    ->expect([
-        'IbnNajjaar\MIBGlobalPay\Core',
-        'IbnNajjaar\MIBGlobalPay\Contracts',
-        'IbnNajjaar\MIBGlobalPay\Exceptions',
-        'IbnNajjaar\MIBGlobalPay\Requests',
-        'IbnNajjaar\MIBGlobalPay\Responses',
-        'IbnNajjaar\MIBGlobalPay\Support',
-        'IbnNajjaar\MIBGlobalPay\MIBGlobalPayConnector',
-    ])
+    ->expect('IbnNajjaar\MIBGlobalPay\Core')
     ->not->toUse('Illuminate');
 
-arch('v2 core uses strict types')
-    ->expect('IbnNajjaar\MIBGlobalPay\Core')
+arch('all source files use strict types')
+    ->expect(['IbnNajjaar\MIBGlobalPay\Core', 'IbnNajjaar\MIBGlobalPay\Laravel'])
     ->toUseStrictTypes();
 
-arch('v2 core value objects are final and readonly')
+arch('core value objects are final and readonly')
     ->expect([
         'IbnNajjaar\MIBGlobalPay\Core\Money\Money',
         'IbnNajjaar\MIBGlobalPay\Core\Config\GatewayConfig',
@@ -32,22 +24,12 @@ arch('v2 core value objects are final and readonly')
     ->toBeFinal()
     ->toBeReadonly();
 
-arch('v2 core exceptions implement the marker interface')
+arch('core exceptions implement the marker interface')
     ->expect('IbnNajjaar\MIBGlobalPay\Core\Exceptions')
     ->classes()
     ->toImplement('IbnNajjaar\MIBGlobalPay\Core\Exceptions\MibGlobalPayException');
 
-arch('v2 core does not depend on the 1.x classes')
-    ->expect('IbnNajjaar\MIBGlobalPay\Core')
-    ->not->toUse([
-        'IbnNajjaar\MIBGlobalPay\Support',
-        'IbnNajjaar\MIBGlobalPay\Requests',
-        'IbnNajjaar\MIBGlobalPay\Responses',
-        'IbnNajjaar\MIBGlobalPay\Exceptions',
-        'IbnNajjaar\MIBGlobalPay\Contracts',
-    ]);
-
-arch('v2 response DTOs and operations are final and readonly')
+arch('response DTOs and operations are final and readonly')
     ->expect([
         'IbnNajjaar\MIBGlobalPay\Core\Responses\OrderResponse',
         'IbnNajjaar\MIBGlobalPay\Core\Responses\TransactionResponse',
@@ -63,7 +45,7 @@ arch('v2 response DTOs and operations are final and readonly')
     ->toBeFinal()
     ->toBeReadonly();
 
-arch('every v2 operation implements the Operation contract')
+arch('every operation implements the Operation contract')
     ->expect('IbnNajjaar\MIBGlobalPay\Core\Operations')
     ->classes()
     ->toImplement('IbnNajjaar\MIBGlobalPay\Core\Contracts\Operation');

@@ -7,7 +7,7 @@ namespace IbnNajjaar\MIBGlobalPay\Core\Enums;
 /**
  * Shared implementation of GatewayEnum for string-backed enums with an
  * `Unrecognized = ''` case. Matching is case-insensitive and ignores
- * surrounding whitespace, because 1.x DTOs exposed lowercase values.
+ * surrounding whitespace (version 1 of this package exposed lowercase values).
  */
 trait ResolvesFromGateway
 {

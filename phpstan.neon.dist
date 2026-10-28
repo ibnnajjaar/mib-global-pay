@@ -1,10 +1,13 @@
-# 1.x code: level 1 is the highest level it passes today. It is removed in stage 8.
-# The v2 code in src/Core is analysed at level max by phpstan-core.neon.dist.
+# One configuration for all of src (core and Laravel layer), at the strictest level, with Larastan.
+includes:
+    - vendor/larastan/larastan/extension.neon
+
 parameters:
-    level: 1
+    level: max
     paths:
         - src
-    excludePaths:
-        - src/Core
-        - src/Laravel
     tmpDir: build/phpstan
+    ignoreErrors:
+        # Used by host test cases, not by the package itself.
+        - identifier: trait.unused
+          path: src/Laravel/Testing/InteractsWithMibGlobalPay.php

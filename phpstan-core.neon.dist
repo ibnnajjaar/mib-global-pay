@@ -1,6 +1,0 @@
-# v2 core: analysed at the strictest level.
-parameters:
-    level: max
-    paths:
-        - src/Core
-    tmpDir: build/phpstan-core

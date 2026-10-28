@@ -57,8 +57,8 @@ describe('OrderResponse', function () {
             ->and($order->status)->toBe(OrderStatus::Initiated);
     });
 
-    it('parses the 1.x partially refunded fixture', function () {
-        $order = OrderResponse::fromPayload(fixturePayload('order_partially_refunded.json', ''));
+    it('parses a partially refunded order', function () {
+        $order = OrderResponse::fromPayload(fixturePayload('order_partially_refunded.json'));
 
         expect($order->status)->toBe(OrderStatus::PartiallyRefunded)
             ->and($order->refundable()->toDecimal())->toBe('70.00')
@@ -138,9 +138,9 @@ describe('TransactionResponse', function () {
             ->and($void->isApproved(new ApprovalPolicy()))->toBeFalse();
     });
 
-    it('parses the 1.x refund fixtures', function () {
-        $ok = TransactionResponse::fromPayload(fixturePayload('transaction_refund_success.json', ''));
-        $declined = TransactionResponse::fromPayload(fixturePayload('transaction_refund_declined.json', ''));
+    it('parses refund responses', function () {
+        $ok = TransactionResponse::fromPayload(fixturePayload('transaction_refund_success.json'));
+        $declined = TransactionResponse::fromPayload(fixturePayload('transaction_refund_declined.json'));
 
         expect($ok->type)->toBe(TransactionType::Refund)
             ->and($ok->isSuccessful())->toBeTrue()
