@@ -28,6 +28,15 @@ Version 2.0.0 is in development. See [DESIGN-v2.md](./DESIGN-v2.md). Version 1.2
 
 - v2 webhooks: `NotificationVerifier` with a mandatory secret (fails closed, timing-safe), the `Notification` types (`TransactionNotification`, `AuthenticationNotification`, `GenericNotification`), and `NotificationStore` with `InMemoryNotificationStore` (dedupe on notification ID, and on order ID plus transaction ID).
 
+- Optional Laravel 13 layer (`IbnNajjaar\MIBGlobalPay\Laravel`, auto-discovered):
+  - service provider, `config/mib-global-pay.php` and the `MibGlobalPay` facade;
+  - the webhook route, plus `Route::mibGlobalPayWebhook($uri)` for hosts that register it themselves, with the `VerifyNotificationSecret` middleware, the controller and the queued `ProcessNotification` job;
+  - the outcome pipeline and its events (`PaymentCaptured`, `CaptureMismatch`, `PaymentCapturedForUnpayableOrder`, `PaymentPending`, `PaymentFailed`, `PaymentReversed`, `UnknownOrderNotification`, `RefundProcessed`, `VoidProcessed`, `NotificationReceived`), and `PaymentOutcome` for the return URL;
+  - database and cache notification stores, with a publishable migration;
+  - the `mib:reconcile` and `mib:prune-notifications` commands;
+  - the opt-in double-capture auto-reversal;
+  - the `<x-mib-global-pay::checkout>` component.
+
 ### Included from the unreleased 1.2 work
 #### Added
 - Lifecycle operations on `MIBGlobalPayConnector`: `refund()`, `void()`, `capture()`, `updateAuthorization()` and `getTransactionDetails()`, backed by `RefundRequest`, `VoidRequest`, `CaptureRequest`, `UpdateAuthorizationRequest` and `RetrieveTransactionRequest`. All of them return `TransactionResponseData`.

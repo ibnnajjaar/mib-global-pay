@@ -49,7 +49,7 @@ jobs:
         run: vendor/bin/phpstan analyse -c phpstan-core.neon.dist --no-progress
 
       - name: Static analysis (v2 Laravel layer, Larastan level max)
-        run: vendor/bin/phpstan analyse -c phpstan-laravel.neon.dist --no-progress
+        run: vendor/bin/phpstan analyse -c phpstan-laravel.neon.dist --no-progress --memory-limit=1G
 
       - name: Run test suite
         run: |

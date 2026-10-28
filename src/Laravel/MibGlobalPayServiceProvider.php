@@ -7,6 +7,8 @@ namespace IbnNajjaar\MIBGlobalPay\Laravel;
 use Illuminate\Routing\Route;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use IbnNajjaar\MIBGlobalPay\Core\MibGateway;
 use Illuminate\Contracts\Foundation\Application;
@@ -16,6 +18,7 @@ use IbnNajjaar\MIBGlobalPay\Core\Config\GatewayConfig;
 use IbnNajjaar\MIBGlobalPay\Core\Support\GatewayOrderId;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use IbnNajjaar\MIBGlobalPay\Core\Webhook\NotificationStore;
+use IbnNajjaar\MIBGlobalPay\Laravel\Events\CaptureMismatch;
 use IbnNajjaar\MIBGlobalPay\Core\Contracts\OrderIdGenerator;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use IbnNajjaar\MIBGlobalPay\Laravel\Console\ReconcileCommand;
@@ -25,6 +28,7 @@ use IbnNajjaar\MIBGlobalPay\Core\Exceptions\ConfigurationException;
 use IbnNajjaar\MIBGlobalPay\Laravel\Stores\DatabaseNotificationStore;
 use IbnNajjaar\MIBGlobalPay\Laravel\Console\PruneNotificationsCommand;
 use IbnNajjaar\MIBGlobalPay\Laravel\Http\Controllers\WebhookController;
+use IbnNajjaar\MIBGlobalPay\Laravel\Listeners\AutoReverseDoubleCapture;
 use IbnNajjaar\MIBGlobalPay\Laravel\Http\Middleware\VerifyNotificationSecret;
 
 /**
@@ -77,6 +81,12 @@ class MibGlobalPayServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->registerRouteMacro();
+
+        // Checks MIB_AUTO_REVERSE_DOUBLE_CAPTURE itself; does nothing while it is off (the default).
+        Event::listen(CaptureMismatch::class, AutoReverseDoubleCapture::class);
+
+        $this->loadViewsFrom(__DIR__ . '/../../resources/views', 'mib-global-pay');
+        Blade::componentNamespace('IbnNajjaar\\MIBGlobalPay\\Laravel\\View\\Components', 'mib-global-pay');
 
         $settings = $this->app->make(Settings::class);
         if ($settings->webhookEnabled() && $settings->registerRoute() && ! $this->app->routesAreCached()) {

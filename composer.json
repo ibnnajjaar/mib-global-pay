@@ -54,7 +54,7 @@
         "analyse": [
             "vendor/bin/phpstan analyse",
             "vendor/bin/phpstan analyse -c phpstan-core.neon.dist",
-            "vendor/bin/phpstan analyse -c phpstan-laravel.neon.dist"
+            "vendor/bin/phpstan analyse -c phpstan-laravel.neon.dist --memory-limit=1G"
         ]
     },
     "config": {

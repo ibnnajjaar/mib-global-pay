@@ -331,6 +331,11 @@ Facts from the Webhook Notifications guide:
 - HTTPS-only delivery and the 2-second response are enforced by the HTTP layer (stage 6), not by the core.
 - `NotificationStore`: `claim(id, ?orderId)`, `release(id)`, `markProcessed(id, NotificationOutcome)`, `outcomeOf(id)`, and `claimTransaction(orderId, transactionId, outcome)` for the business-level dedupe. `InMemoryNotificationStore` implements it for tests and single-process use.
 
+**Decided after stage 5:**
+- Notifications are classified by body shape until MIB confirms the formats (Q18).
+- Headers are matched case-insensitively. `X-Notification-ID` is required and `X-Notification-Attempt` is optional (Q19).
+- `NotificationStore::release()` and the `(order_id, transaction_id, outcome)` business dedupe are kept.
+
 ### 5.2 Dedupe and idempotency
 
 - `Notification::$id` comes from `X-Notification-Id` and is required: if it is missing, `MalformedNotification` is thrown. `$attempt` comes from `X-Notification-Attempt`.
@@ -354,6 +359,54 @@ Facts from the Webhook Notifications guide:
 ## 6. Laravel 13 layer (optional)
 
 It is auto-discovered through `extra.laravel.providers`. The core works without it, and `illuminate/*` is listed under `suggest` and `require-dev` only (decided, §12 Q2).
+
+### 6.0 Implemented in stage 6
+
+**Classes:**
+- `Laravel\MibGlobalPayServiceProvider`, auto-discovered via `extra.laravel.providers`, together with the `MibGlobalPay` facade alias.
+- `config/mib-global-pay.php`, with the keys and defaults of §6.7 F. Publish it with `--tag=mib-global-pay-config`.
+- The facade `Laravel\Facades\MibGlobalPay`, backed by `Laravel\MibGlobalPay`. Its helpers are `attemptOrderId()`, `randomOrderId()`, `newCheckoutRequest()` (which applies the checkout timeout, and the webhook URL as `order.notificationUrl` when the route exists), `webhookUrl()`, `attemptExpiresAt()`, `attemptGuard()` and `reversal()`. Every other method is forwarded to the `Gateway`.
+
+**Webhook endpoint:**
+- `Route::mibGlobalPayWebhook($uri)` registers a POST route named `mib-global-pay.webhook` with the CSRF middleware excluded. It is auto-registered on `webhook.domain`/`webhook.path` unless `webhook.register_route` is false.
+- `VerifyNotificationSecret` middleware.
+- `WebhookController`.
+- `Jobs\ProcessNotification`. It carries the raw body and the ID/attempt headers. The secret header is never put on the queue.
+
+**HTTP status codes from the webhook endpoint:**
+
+| Situation | Status | Why |
+|---|---|---|
+| Accepted and queued | 200 `{"status":"accepted"}` | |
+| Duplicate `X-Notification-ID` | 200 `{"status":"duplicate"}` | Not reprocessed |
+| Missing or wrong `X-Notification-Secret` | **401** | The sender failed to authenticate. 401 is the conventional code, it matches §6.2, and it is never a 2xx. 403 would wrongly suggest an authenticated sender lacking permission. |
+| No `X-Notification-ID`, or a non-JSON body | 400 | |
+| No secret configured, no `PayableResolver` bound, or queueing failed (claim released) | 503 | Fails closed, and MIB redelivers (up to 20 times over 3 days) once the cause is fixed |
+| `webhook.enabled = false` (only reachable via the macro) | 404 | |
+
+**Outcome pipeline:**
+- `Outcome\OutcomeProcessor` is used by the job, by `PaymentOutcome::resolveFromReturn()` and `check()`, and by `mib:reconcile`.
+- It calls `verifyCapture()` against `Payable::expectedAmount()`. Then, inside `Payable::lock()`, it re-reads the payable and dispatches at most one §6.7 E event, with business dedupe through `NotificationStore::claimTransaction()`.
+- The package never changes the payable.
+
+**Stores:**
+- `Stores\DatabaseNotificationStore` (the default) uses the publishable migration (`--tag=mib-global-pay-migrations`). Table `mib_global_pay_notifications` has `notification_id` unique, plus `(order_id, transaction_id, outcome)` unique.
+- `Stores\CacheNotificationStore` uses atomic `add()` with a 5-day TTL.
+
+**Commands:**
+- `mib:reconcile` processes every `awaitingGateway()` attempt, and exits non-zero if any attempt errored.
+- `mib:prune-notifications --days=30` (minimum 4).
+
+**Double capture and checkout page:**
+- `Listeners\AutoReverseDoubleCapture` is always registered but does nothing unless `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=true`. When enabled, it queues `Jobs\ReverseCapture` after commit. That job voids, then refunds, with transaction IDs fixed at creation so a retry resends identical requests.
+- Blade `<x-mib-global-pay::checkout :session="$id" />` renders the Checkout.js page.
+
+**Provisional pipeline choices (need confirmation):**
+1. `PaymentFailed` fires for `NotCaptured` or `NotFound` only when the attempt is finished: either the triggering webhook transaction failed, or the attempt is past `expiresAt()`. Otherwise no event is fired.
+2. The return URL always verifies with the gateway, even when `resultIndicator` doesn't match. The match result is only returned to the host, as `indicatorMatched`.
+3. Refund and void notifications dispatch `RefundProcessed` / `VoidProcessed` once, then re-verify the order, which can produce `PaymentReversed`. AUTHORIZATION, VERIFY and other non-money-in transaction notifications are `Ignored`.
+4. A capture on a payable that is `Paid` without a recorded settlement fires `CaptureMismatch(DoubleCapture)` with `existingSettlement = null`, never `PaymentCaptured`.
+5. `PaymentPending` and `PaymentFailed` are not deduped, so reconciliation may repeat them. `PaymentCaptured`, `CaptureMismatch`, `PaymentCapturedForUnpayableOrder` and `PaymentReversed` fire once per order + transaction.
 
 ### 6.1 Config (`config/mib-global-pay.php`) and env keys
 
