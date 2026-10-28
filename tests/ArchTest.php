@@ -7,9 +7,16 @@ arch('no debugging helpers are left in the source')
     ->not->toBeUsed();
 
 arch('only the optional Laravel layer depends on the Laravel framework')
-    ->expect('IbnNajjaar\MIBGlobalPay')
-    ->not->toUse('Illuminate')
-    ->ignoring('IbnNajjaar\MIBGlobalPay\Laravel');
+    ->expect([
+        'IbnNajjaar\MIBGlobalPay\Core',
+        'IbnNajjaar\MIBGlobalPay\Contracts',
+        'IbnNajjaar\MIBGlobalPay\Exceptions',
+        'IbnNajjaar\MIBGlobalPay\Requests',
+        'IbnNajjaar\MIBGlobalPay\Responses',
+        'IbnNajjaar\MIBGlobalPay\Support',
+        'IbnNajjaar\MIBGlobalPay\MIBGlobalPayConnector',
+    ])
+    ->not->toUse('Illuminate');
 
 arch('v2 core uses strict types')
     ->expect('IbnNajjaar\MIBGlobalPay\Core')

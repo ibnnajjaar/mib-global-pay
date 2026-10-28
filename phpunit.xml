@@ -18,6 +18,11 @@
         </testsuite>
     </testsuites>
 
+    <php>
+        <!-- Testbench boots a Laravel app per test; 128M is not enough for the full suite. -->
+        <ini name="memory_limit" value="512M"/>
+    </php>
+
     <source>
         <include>
             <directory suffix=".php">src</directory>
