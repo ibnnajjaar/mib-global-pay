@@ -101,15 +101,16 @@ final readonly class GatewayConfig
         );
     }
 
+    /** e.g. https://test-mib.mtf.gateway.mastercard.com/api/rest/version/100/ */
+    public function apiBaseUrl(): string
+    {
+        return sprintf('https://%s/api/rest/version/%d/', $this->host, $this->apiVersion);
+    }
+
     /** e.g. https://test-mib.mtf.gateway.mastercard.com/api/rest/version/100/merchant/TEST123/ */
     public function baseUrl(): string
     {
-        return sprintf(
-            'https://%s/api/rest/version/%d/merchant/%s/',
-            $this->host,
-            $this->apiVersion,
-            rawurlencode($this->merchantId),
-        );
+        return $this->apiBaseUrl() . 'merchant/' . rawurlencode($this->merchantId) . '/';
     }
 
     public function allowsCurrency(Currency $currency): bool

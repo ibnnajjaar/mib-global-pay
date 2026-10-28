@@ -38,3 +38,24 @@ arch('v2 core does not depend on the 1.x classes')
         'IbnNajjaar\MIBGlobalPay\Exceptions',
         'IbnNajjaar\MIBGlobalPay\Contracts',
     ]);
+
+arch('v2 response DTOs and operations are final and readonly')
+    ->expect([
+        'IbnNajjaar\MIBGlobalPay\Core\Responses\OrderResponse',
+        'IbnNajjaar\MIBGlobalPay\Core\Responses\TransactionResponse',
+        'IbnNajjaar\MIBGlobalPay\Core\Responses\CheckoutSession',
+        'IbnNajjaar\MIBGlobalPay\Core\Responses\SessionDetails',
+        'IbnNajjaar\MIBGlobalPay\Core\Responses\GatewayStatus',
+        'IbnNajjaar\MIBGlobalPay\Core\Responses\PaymentOptions',
+        'IbnNajjaar\MIBGlobalPay\Core\Operations\Checkout\InitiateCheckout',
+        'IbnNajjaar\MIBGlobalPay\Core\Operations\Order\Capture',
+        'IbnNajjaar\MIBGlobalPay\Core\Operations\Order\Refund',
+        'IbnNajjaar\MIBGlobalPay\Core\Operations\Order\VoidTransaction',
+    ])
+    ->toBeFinal()
+    ->toBeReadonly();
+
+arch('every v2 operation implements the Operation contract')
+    ->expect('IbnNajjaar\MIBGlobalPay\Core\Operations')
+    ->classes()
+    ->toImplement('IbnNajjaar\MIBGlobalPay\Core\Contracts\Operation');

@@ -1,0 +1,9 @@
+{
+    "merchant": "TEST123",
+    "order": {"id": "ORDER-AUTH-1", "status": "CAPTURED", "totalCapturedAmount": 40.00},
+    "response": {"acquirerCode": "00", "gatewayCode": "APPROVED", "gatewayRecommendation": "PROCEED"},
+    "result": "SUCCESS",
+    "timeOfRecord": "2026-10-21T12:00:00.000Z",
+    "transaction": {"amount": 40.00, "currency": "MVR", "id": "capture-1", "receipt": "629312345690", "type": "CAPTURE", "reference": "SHIP-1"},
+    "version": "100"
+}

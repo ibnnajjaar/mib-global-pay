@@ -170,6 +170,22 @@ The full v100 enum is: ABORTED, ACQUIRER_SYSTEM_ERROR, APPROVED, APPROVED_AUTO, 
 
 ### 4.1 Connector
 
+**Implemented in stage 3** (names as built):
+
+- `Core\MibGateway` implements `Core\Contracts\Gateway`, which the stage 7 fake will also implement. It is constructed as `new MibGateway(GatewayConfig, ?ClientInterface, ?RequestFactoryInterface, ?StreamFactoryInterface, ?LoggerInterface, ?RetryPolicy, ?Closure $sleep)`.
+  - The default transport is Guzzle 7 with `timeout` / `connect_timeout` from the config. A custom PSR-18 client owns its own timeouts.
+  - New runtime dependencies: `psr/http-client`, `psr/http-factory`, `psr/log` ^3.
+- `send(Operation)` is public and supported. Each `Core\Contracts\Operation` declares `method()`, `scope()` (`Merchant`, or `Gateway` for unauthenticated `/information`), `path()`, `body(GatewayConfig)`, `isIdempotent()` and `parse()`.
+- **Sub-clients:** `checkout()`, `sessions()`, `orders()` and `gateway()`. The shortcuts are listed in the table below. The void operation class is `VoidTransaction`, because `void` is reserved in PHP; the method is still `void()`.
+- **Errors:**
+  - HTTP non-2xx → `GatewayException`, with the gateway's `error` object.
+  - No response → `TransportException`.
+  - Non-JSON 2xx body → `MalformedPayload`.
+  - A decline → a `TransactionResponse` with `Result::Failure`.
+- **Retries:** `RetryPolicy(maxRetries, delayMilliseconds)` is opt-in. It retries transport errors and 5xx, for idempotent operations only: GETs, and PUT transaction operations, where MIB documents that an identical resend is safe. Initiate Checkout, Update Session and Payment Options Inquiry are never retried. `RetryPolicy::gatewayRecommended()` is one retry after 60 s, per MIB's "Making a Server API Request" FAQ.
+- **Logging:** PSR-3, at debug for request and response and at warning or info for failures and retries. Bodies pass through `Http\Redactor`, which masks password, secret, successIndicator, resultIndicator, securityCode, card number, token and authorization keys. Headers are never logged.
+- `Requests\CheckoutRequest` is a `final` class (not `readonly`, so its `with*()` methods can clone and modify). It supports `withReference()` (any characters, 1–40) and `withNotificationUrl()` per request.
+
 ```php
 $gateway = new MibGateway(new GatewayConfig(
     host: 'test-mib.mtf.gateway.mastercard.com',

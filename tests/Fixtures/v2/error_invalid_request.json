@@ -1,0 +1,10 @@
+{
+    "error": {
+        "cause": "INVALID_REQUEST",
+        "explanation": "Value '0.00' is invalid. Amount must be greater than zero",
+        "field": "order.amount",
+        "supportCode": "6f3b1a",
+        "validationType": "INVALID"
+    },
+    "result": "ERROR"
+}

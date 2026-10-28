@@ -1,0 +1,17 @@
+{
+    "merchant": "TEST123",
+    "session": {
+        "id": "SESSION0002899787259G30902270H6",
+        "updateStatus": "SUCCESS",
+        "version": "e3f144ce02"
+    },
+    "interaction": {
+        "operation": "PURCHASE"
+    },
+    "order": {
+        "id": "ISIMS-R-IUM-FN-2026-123-1",
+        "amount": 1250.5,
+        "currency": "MVR"
+    },
+    "version": "100"
+}

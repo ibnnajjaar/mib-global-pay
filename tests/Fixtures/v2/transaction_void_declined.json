@@ -1,0 +1,8 @@
+{
+    "merchant": "TEST123",
+    "order": {"id": "ORDER-1", "status": "CAPTURED"},
+    "response": {"acquirerCode": "12", "gatewayCode": "DECLINED", "gatewayRecommendation": "DO_NOT_PROCEED"},
+    "result": "FAILURE",
+    "transaction": {"id": "void-1", "targetTransactionId": "1", "type": "VOID_PAYMENT"},
+    "version": "100"
+}

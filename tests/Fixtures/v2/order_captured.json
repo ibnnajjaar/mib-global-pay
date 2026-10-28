@@ -1,0 +1,36 @@
+{
+    "amount": 1250.50,
+    "creationTime": "2026-10-20T09:00:00.000Z",
+    "currency": "MVR",
+    "id": "ISIMS-R-IUM-FN-2026-123-1",
+    "merchant": "TEST123",
+    "reference": "(R)IUM/FN/2026/123",
+    "result": "SUCCESS",
+    "status": "CAPTURED",
+    "totalAuthorizedAmount": 1250.50,
+    "totalCapturedAmount": 1250.50,
+    "totalRefundedAmount": 0,
+    "transaction": [
+        {
+            "order": {"id": "ISIMS-R-IUM-FN-2026-123-1", "status": "AUTHENTICATED"},
+            "result": "SUCCESS",
+            "timeOfRecord": "2026-10-20T09:01:00.000Z",
+            "transaction": {"amount": 1250.50, "currency": "MVR", "id": "auth-1", "type": "AUTHENTICATION"}
+        },
+        {
+            "order": {"id": "ISIMS-R-IUM-FN-2026-123-1", "status": "CAPTURED"},
+            "response": {"acquirerCode": "00", "acquirerMessage": "Approved", "gatewayCode": "APPROVED", "gatewayRecommendation": "PROCEED"},
+            "result": "SUCCESS",
+            "timeOfRecord": "2026-10-20T09:01:10.000Z",
+            "transaction": {
+                "amount": 1250.50,
+                "authorizationCode": "654321",
+                "currency": "MVR",
+                "id": "1",
+                "receipt": "629312345678",
+                "source": "INTERNET",
+                "type": "PAYMENT"
+            }
+        }
+    ]
+}

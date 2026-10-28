@@ -20,6 +20,8 @@ Version 2.0.0 is in development. See [DESIGN-v2.md](./DESIGN-v2.md). Version 1.2
 ### Added
 - v2 core types under `IbnNajjaar\MIBGlobalPay\Core`: `Money` (minor units, explicit rounding, no float paths), the `Currency` enum (curated ISO 4217 subset), the gateway enums (`OrderStatus`, `TransactionType`, `Result`, `GatewayCode`, `GatewayRecommendation`) with an `Unrecognized` fallback, `ApprovalPolicy`, the null-safe `Payload` reader, `GatewayConfig` with environment presets, and the exception hierarchy (`MibGlobalPayException` marker interface). The 1.x API is unchanged.
 
+- v2 connector `Core\MibGateway` (PSR-18 transport, Guzzle 7 by default, redacted PSR-3 logging, opt-in retries for idempotent operations) with the 2.0 operations: Initiate Checkout, Retrieve Session, Update Session (experimental), Retrieve Order, Retrieve Transaction, Capture, Refund, Void, Update Authorization, Check Gateway and Payment Options Inquiry, plus typed readonly response DTOs. Requires `psr/http-client`, `psr/http-factory` and `psr/log`.
+
 ### Included from the unreleased 1.2 work
 #### Added
 - Lifecycle operations on `MIBGlobalPayConnector`: `refund()`, `void()`, `capture()`, `updateAuthorization()` and `getTransactionDetails()`, backed by `RefundRequest`, `VoidRequest`, `CaptureRequest`, `UpdateAuthorizationRequest` and `RetrieveTransactionRequest`. All of them return `TransactionResponseData`.

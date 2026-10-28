@@ -1,0 +1,10 @@
+{
+    "merchant": "TEST123",
+    "result": "SUCCESS",
+    "paymentTypes": {
+        "card": {
+            "cardTypes": [{"cardType": "CREDIT"}, {"cardType": "DEBIT"}],
+            "currencies": [{"currency": "MVR"}, {"currency": "USD"}]
+        }
+    }
+}

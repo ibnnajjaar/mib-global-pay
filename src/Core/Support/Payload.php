@@ -131,6 +131,26 @@ final readonly class Payload
     }
 
     /**
+     * An ISO 8601 timestamp such as "2023-11-03T13:49:07.464Z".
+     *
+     * @throws MalformedPayload when the value is not a valid timestamp
+     */
+    public function dateTime(string $path): ?\DateTimeImmutable
+    {
+        $value = $this->string($path);
+
+        if ($value === null) {
+            return null;
+        }
+
+        try {
+            return new \DateTimeImmutable($value);
+        } catch (\Exception) {
+            throw $this->malformed($path, 'an ISO 8601 timestamp');
+        }
+    }
+
+    /**
      * Never null: a missing value resolves to the enum's Unrecognized case.
      *
      * @template T of GatewayEnum

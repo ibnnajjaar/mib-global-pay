@@ -1,0 +1,11 @@
+{
+    "checkoutMode": "WEBSITE",
+    "merchant": "TEST123",
+    "result": "SUCCESS",
+    "session": {
+        "id": "SESSION0002899787259G30902270H6",
+        "updateStatus": "SUCCESS",
+        "version": "e3f144ce02"
+    },
+    "successIndicator": "f8e1b1e3c2d54a7b"
+}
