@@ -6,9 +6,10 @@ arch('no debugging helpers are left in the source')
     ->expect(['dd', 'dump', 'var_dump', 'print_r', 'ray'])
     ->not->toBeUsed();
 
-arch('the package does not depend on the Laravel framework')
+arch('only the optional Laravel layer depends on the Laravel framework')
     ->expect('IbnNajjaar\MIBGlobalPay')
-    ->not->toUse('Illuminate');
+    ->not->toUse('Illuminate')
+    ->ignoring('IbnNajjaar\MIBGlobalPay\Laravel');
 
 arch('v2 core uses strict types')
     ->expect('IbnNajjaar\MIBGlobalPay\Core')
@@ -73,3 +74,7 @@ arch('webhook notifications are final and readonly')
     ])
     ->toBeFinal()
     ->toBeReadonly();
+
+arch('the core does not depend on the Laravel layer')
+    ->expect('IbnNajjaar\MIBGlobalPay\Core')
+    ->not->toUse('IbnNajjaar\MIBGlobalPay\Laravel');

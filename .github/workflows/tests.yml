@@ -48,6 +48,9 @@ jobs:
       - name: Static analysis (v2 core, level max)
         run: vendor/bin/phpstan analyse -c phpstan-core.neon.dist --no-progress
 
+      - name: Static analysis (v2 Laravel layer, Larastan level max)
+        run: vendor/bin/phpstan analyse -c phpstan-laravel.neon.dist --no-progress
+
       - name: Run test suite
         run: |
           if [[ "${{ startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '8.4' }}" == "true" ]]; then

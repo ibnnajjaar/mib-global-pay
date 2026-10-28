@@ -53,7 +53,8 @@
         "lint": "vendor/bin/pint --test",
         "analyse": [
             "vendor/bin/phpstan analyse",
-            "vendor/bin/phpstan analyse -c phpstan-core.neon.dist"
+            "vendor/bin/phpstan analyse -c phpstan-core.neon.dist",
+            "vendor/bin/phpstan analyse -c phpstan-laravel.neon.dist"
         ]
     },
     "config": {
@@ -67,6 +68,14 @@
     "extra": {
         "branch-alias": {
             "dev-main": "2.x-dev"
+        },
+        "laravel": {
+            "providers": [
+                "IbnNajjaar\\MIBGlobalPay\\Laravel\\MibGlobalPayServiceProvider"
+            ],
+            "aliases": {
+                "MibGlobalPay": "IbnNajjaar\\MIBGlobalPay\\Laravel\\Facades\\MibGlobalPay"
+            }
         }
     }
 }

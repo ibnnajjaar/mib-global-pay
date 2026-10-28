@@ -1,0 +1,9 @@
+# v2 Laravel layer, analysed with Larastan.
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: max
+    paths:
+        - src/Laravel
+    tmpDir: build/phpstan-laravel

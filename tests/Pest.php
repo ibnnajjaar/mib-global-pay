@@ -11,3 +11,5 @@ declare(strict_types=1);
 | unchanged under Pest. New v2 tests are written in Pest's functional style.
 |
 */
+
+uses(IbnNajjaar\MIBGlobalPay\Tests\Laravel\TestCase::class)->in('Laravel');
