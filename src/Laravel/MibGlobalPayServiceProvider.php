@@ -18,10 +18,12 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use IbnNajjaar\MIBGlobalPay\Core\Webhook\NotificationStore;
 use IbnNajjaar\MIBGlobalPay\Core\Contracts\OrderIdGenerator;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use IbnNajjaar\MIBGlobalPay\Laravel\Console\ReconcileCommand;
 use IbnNajjaar\MIBGlobalPay\Core\Webhook\NotificationVerifier;
 use IbnNajjaar\MIBGlobalPay\Laravel\Stores\CacheNotificationStore;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\ConfigurationException;
 use IbnNajjaar\MIBGlobalPay\Laravel\Stores\DatabaseNotificationStore;
+use IbnNajjaar\MIBGlobalPay\Laravel\Console\PruneNotificationsCommand;
 use IbnNajjaar\MIBGlobalPay\Laravel\Http\Controllers\WebhookController;
 use IbnNajjaar\MIBGlobalPay\Laravel\Http\Middleware\VerifyNotificationSecret;
 
@@ -89,6 +91,8 @@ class MibGlobalPayServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__ . '/../../config/mib-global-pay.php' => $this->app->configPath('mib-global-pay.php'),
             ], 'mib-global-pay-config');
+
+            $this->commands([ReconcileCommand::class, PruneNotificationsCommand::class]);
 
             $this->publishesMigrations([
                 __DIR__ . '/../../database/migrations' => $this->app->databasePath('migrations'),

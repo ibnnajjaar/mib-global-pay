@@ -44,6 +44,7 @@ abstract class TestCase extends Orchestra
         $app['config']->set('mib-global-pay.notification_store', 'cache');
         $app['config']->set('cache.default', 'array');
         $app['config']->set('queue.default', 'sync');
+        $app['config']->set('database.connections.testing', ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']);
         $app['config']->set('app.url', 'https://students.ium.test');
 
         foreach (static::$config as $key => $value) {
