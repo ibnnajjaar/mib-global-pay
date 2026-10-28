@@ -627,7 +627,15 @@ Event::assertDispatched(PaymentCaptured::class);
 
 This section is self-contained, so it can be handed to the ISIMS side as it stands.
 
-- Status: **PROVISIONAL** until the v2.0 Laravel-layer stage is merged. Items marked **(open)** may still change.
+- Status: **FINAL** as of stage 6 (pushed at `d4fbd10`). Everything in A–F is implemented in the package and decided. What is not final:
+  - **ISIMS design choice:** how ISIMS stores the frozen invoice set (A). The package only requires that the set stays immutable while the payable is frozen.
+  - **Waiting on MIB** (behaviour implemented, but the gateway facts are unverified):
+    - the exact response for an unknown order, which maps to `NotFound` and feeds both the AttemptGuard supersede rule and `PaymentFailed` (MIB question 17);
+    - the webhook body format and the Payment Alerts shape (question 18);
+    - webhook header details (question 19);
+    - which characters `order.id` and `order.reference` accept (question 16);
+    - the production host (question 14).
+  - Any change caused by an MIB answer will be listed in the CHANGELOG and in this section.
 - Namespaces:
   - core: `IbnNajjaar\MIBGlobalPay\Core\…`
   - Laravel: `IbnNajjaar\MIBGlobalPay\Laravel\…`
