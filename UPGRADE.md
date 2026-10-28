@@ -4,9 +4,8 @@ Version 2.0 is a rewrite for **PHP 8.4+** with an optional **Laravel 13** layer.
 released 1.x version; the unreleased 1.2 work ships as part of 2.0. The full design and every
 decision are in [DESIGN-v2.md](./DESIGN-v2.md).
 
-> **Transition period.** Until 2.0.0 is tagged, `dev-main` still contains the 1.x classes
-> (`MIBGlobalPayConnector`, `OrderData`, the `*ResponseData` DTOs) next to the v2 code, so you can
-> migrate step by step. They will be removed before 2.0.0.
+> **The 1.x classes are removed in 2.0** (`MIBGlobalPayConnector`, `OrderData`, the `*ResponseData`
+> DTOs, `MIBGlobalPayException`, ...). Migrate with the mapping below; nothing from 1.x remains.
 
 ## Requirements
 

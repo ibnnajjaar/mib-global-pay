@@ -8,14 +8,17 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Semantic Versioning: https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
-Version 2.0.0 is in development. See [DESIGN-v2.md](./DESIGN-v2.md). Version 1.2.0 was never released, so the changes listed under "Included from the unreleased 1.2 work" ship as part of 2.0.0.
+Ready to be released as **2.0.0**: rename this heading to `## [2.0.0] - YYYY-MM-DD` on the day you tag, and update the link at the bottom. Version 2 is a rewrite; see [UPGRADE.md](./UPGRADE.md) and [DESIGN-v2.md](./DESIGN-v2.md). Version 1.2.0 was never released, so the changes listed under "Included from the unreleased 1.2 work" ship as part of 2.0.0.
+
+### Removed
+- **Breaking:** the whole 1.x API: `MIBGlobalPayConnector`, `OrderData` / `BaseOrderData`, the `Requests\*` and `Responses\*` classes (`CheckoutSessionResponseData`, `OrderResponseData`, `TransactionResponseData`, `WebhookResponseData`, `HostedCheckoutReturnData`), `Support\*` (`Connector`, `Request`, `Response`, `Amount`, `Arr`, `Path`, `TransactionId`, the string-constant classes), `Contracts\IsOrderData` / `IsResponseData`, and the 1.x `Exceptions\MIBGlobalPayException` / `GatewayException`. Their replacements are in `IbnNajjaar\MIBGlobalPay\Core` and `\Laravel`; see UPGRADE.md.
 
 ### Changed
 - **Breaking:** requires PHP `^8.4`. PHP 7.2 to 8.3 are no longer supported.
 - **Breaking:** requires `guzzlehttp/guzzle` `^7.9` and `psr/http-message` `^2.0`. Guzzle 6 and `psr/http-message` 1.x are no longer supported.
-- `illuminate/support` (`^13.0`) is suggested for the planned optional Laravel 13 layer. It is not required.
+- `illuminate/support` (`^13.0`) is suggested for the optional Laravel 13 layer. It is not required.
 - `composer.json`: branch alias `dev-main` → `2.x-dev`.
-- Tooling: the test suite runs on Pest 4 (PHPUnit 12). Laravel Pint replaces php-cs-fixer, and PHPStan is added (level 1 for now). Orchestra Testbench and Larastan are added for the coming Laravel layer. CI and the Docker image now use PHP 8.4.
+- Tooling: the test suite runs on Pest 4 (PHPUnit 12) with Orchestra Testbench. Laravel Pint replaces php-cs-fixer and is checked in CI. PHPStan runs at level max over all of `src`, with Larastan. CI and the Docker image use PHP 8.4, and CI tests PHP 8.4 and 8.5.
 
 ### Added
 - v2 core types under `IbnNajjaar\MIBGlobalPay\Core`: `Money` (minor units, explicit rounding, no float paths), the `Currency` enum (curated ISO 4217 subset), the gateway enums (`OrderStatus`, `TransactionType`, `Result`, `GatewayCode`, `GatewayRecommendation`) with an `Unrecognized` fallback, `ApprovalPolicy`, the null-safe `Payload` reader, `GatewayConfig` with environment presets, and the exception hierarchy (`MibGlobalPayException` marker interface). The 1.x API is unchanged.

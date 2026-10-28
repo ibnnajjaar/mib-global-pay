@@ -6,9 +6,8 @@
 PHP client for **MIB (Maldives Islamic Bank) Global Pay**, the Mastercard Payment Gateway Services
 (MPGS) **Hosted Checkout**, with an optional **Laravel 13** layer.
 
-> **Version 2 is in development on `dev-main`.** It requires PHP 8.4+. Upgrading from 1.1: see
-> [UPGRADE.md](./UPGRADE.md). The design and every decision are in [DESIGN-v2.md](./DESIGN-v2.md).
-> The 1.x classes are still on `dev-main` during the transition and will be removed before 2.0.0.
+> **Version 2** requires PHP 8.4+. Upgrading from 1.1: see [UPGRADE.md](./UPGRADE.md). The design
+> and every decision are in [DESIGN-v2.md](./DESIGN-v2.md).
 
 The rule this package is built around: **a payment is paid only when the gateway says so for the
 exact amount you expected.** The return URL and the webhook are triggers; `verifyCapture()` is the
@@ -35,7 +34,7 @@ proof.
 ## Installation
 
 ```bash
-composer require ibnnajjaar/mib-global-pay:dev-main
+composer require ibnnajjaar/mib-global-pay:^2.0
 ```
 
 ## Core usage (any PHP app)

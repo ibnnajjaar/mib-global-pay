@@ -1,7 +1,16 @@
 # Design: `ibnnajjaar/mib-global-pay` v2.0.0
 
-Status: **draft for review**. No v2 code exists yet.
-Supersedes nothing. It builds on `docs/v1.2-implementation-plan.md` §9 (items deferred to v2).
+Status: **ready for 2.0.0.** All stages are implemented, through stage 8 (1.x API removed). This document records the design and every decision. Remaining items that depend on MIB, all implemented but with the gateway facts unverified:
+- the exact response for an unknown order, which maps to `NotFound` and drives the AttemptGuard supersede rule and `PaymentFailed` (MIB question 17);
+- the webhook body format, and the Payment Alerts body shape, classified by body shape until confirmed (question 18);
+- webhook headers: does the attempt counter start at 1, is the ID always present, and which casing is sent (question 19);
+- which characters `order.id` and `order.reference` accept (question 16);
+- the production gateway host: `Environment::Production` has no preset until MIB answers (question 14);
+- whether `APPROVED_AUTO` / `PARTIALLY_APPROVED` occur (questions 5–6), whether Update Session works on HCO sessions (question 3, shipped as experimental), and which operations, currencies and features are enabled (questions 1, 2, 7–13, 15).
+
+The full list for MIB is in "Questions for MIB" (§12), and as a sendable letter in `docs/mib-questions.md` (untracked).
+
+It builds on `docs/v1.2-implementation-plan.md` §9 (items deferred to v2).
 
 Facts about the gateway in this document come from the MIB test-gateway documentation, read on 2026-10-28. That is the documentation at `https://test-mib.mtf.gateway.mastercard.com/api/documentation/`, API reference REST-JSON v100. §14–§17 hold the feature inventory and the list of sources. Anything not confirmed there is marked **(unverified)**.
 
@@ -74,7 +83,7 @@ Namespace: `IbnNajjaar\MIBGlobalPay\` is kept, and `Core\` and `Laravel\` become
   - `array_find` / `array_any` in place of loops (`OrderResponse::findTransaction`).
 - No `mixed`, except at the decode boundary. Every payload is parsed once, null-safely, through a small `Payload` reader (`string()`, `?string()`, `money()`, `enum()`). The reader never emits notices. This fixes the ISIMS request about `fromArray` throwing notices when keys are missing.
 - Unknown enum values from the gateway map to an `Unrecognized` case (backed by `''`) via a never-throwing `fromGateway(?string): self`, not an exception. The DTO keeps the raw string. The fallback is not named `Unknown`, because `Result` and `GatewayCode` have a real gateway value `UNKNOWN` (decided, stage 2).
-- PHPStan level max (or Larastan for `src/Laravel`) in CI. `src/Core` runs at `max` through `phpstan-core.neon.dist`; the 1.x code stays at level 1 until stage 8.
+- PHPStan at level max in CI: one `phpstan.neon.dist` over all of `src`, with Larastan (stage 8).
 
 ---
 
@@ -636,7 +645,7 @@ Event::assertDispatched(PaymentCaptured::class);
 
 This section is self-contained, so it can be handed to the ISIMS side as it stands.
 
-- Status: **FINAL** as of stage 6 (pushed at `d4fbd10`). Everything in A–F is implemented in the package and decided. What is not final:
+- Status: **FINAL** as of stage 6 (pushed at `d4fbd10`), with the stage 7.1 fixes (`0749ef4`). Everything in A–F is implemented in the package and decided. What is not final:
   - **ISIMS design choice:** how ISIMS stores the frozen invoice set (A). The package only requires that the set stays immutable while the payable is frozen.
   - **Waiting on MIB** (behaviour implemented, but the gateway facts are unverified):
     - the exact response for an unknown order, which maps to `NotFound` and feeds both the AttemptGuard supersede rule and `PaymentFailed` (MIB question 17);
@@ -817,11 +826,11 @@ Binding, in an ISIMS service provider: `$this->app->bind(PayableResolver::class,
      4. Otherwise the new attempt is allowed. `attemptsToSupersede` lists the attempts that are expired and `NotCaptured` or `NotFound`, plus any `Reversed` attempt, expired or not.
      - **Decided:** `NotFound` counts as unpaid. A Hosted Checkout order only appears at the gateway once the payer submits payment, so an unpaid, expired session reads as not found. *Caveat:* this depends on the unverified NotFound mapping (MIB question 17).
      - `Failed` and `Superseded` attempts need no check.
-     - **Cost:** one Retrieve Order per attempt that may still be paid, usually zero or one. If the gateway can't be reached, the guard throws, so no new attempt starts while an older one might be paid.
+     - **Cost:** one Retrieve Order per attempt that may still be paid, usually zero or one. **Decided:** if the gateway can't be reached, the guard throws, so no new attempt starts during an outage while an older one might be paid.
   - When it allows, the host marks every attempt in `GuardResult::$attemptsToSupersede` as `Superseded`. All of them can legally make that transition, including `Created`. The host then creates attempt `nextAttemptNumber` in state `Created`.
   - `GuardResult` fields: `allowed`, `reason: ?GuardRefusal`, `nextAttemptNumber`, `attemptsToSupersede`, `reusableAttempt`, `blockingAttempt`, and `verifications` (by gateway order ID, for audit).
-  - The pipeline takes `Payable::lock()` again inside the host's lock, so **`lock()` must be re-entrant**. Nested `DB::transaction` with `lockForUpdate` is re-entrant.
-- **Attempt lifecycle** (`AttemptState::canTransitionTo()`; stage 7.1 added `Created → Superseded`, `Live → Failed` and `Expired → Failed`):
+  - **Decided:** the pipeline takes `Payable::lock()` again inside the host's lock, so **`lock()` must be re-entrant**. Nested `DB::transaction` with `lockForUpdate` is re-entrant.
+- **Attempt lifecycle** (`AttemptState::canTransitionTo()`; stage 7.1 added `Created → Superseded`, `Live → Failed` and `Expired → Failed`, all **decided**):
   - `Created → Live | Failed | Superseded`
   - `Live → Captured | Expired | Failed | Superseded`
   - `Expired → Captured | Failed | Superseded`
@@ -985,7 +994,7 @@ A payment with a live checkout session is frozen until MIB gives a final status,
 
 ## 11. Upgrade path
 
-The path is **1.1 → 2.0 directly**. No 1.2 or other 1.x release is planned (decided), and 1.1.0 stays the last 1.x tag.
+The path is **1.1 → 2.0 directly**. The 1.x API is removed in 2.0 (stage 8). No 1.2 or other 1.x release is planned (decided), and 1.1.0 stays the last 1.x tag.
 
 1. Hosts on 1.1 stay there until they migrate. There is no 1.x maintenance branch. If a 1.1 security fix is ever needed, a `1.x` branch is cut from v1.1.0 (4688a70) on demand (decided, §12 Q20).
 2. Write `UPGRADE.md` with a **1.1 → 2.0** method mapping table, covering the 1.1 methods only (`createTransaction`, `getOrderDetails`, `OrderData`, and the Checkout/Order/Webhook/HostedCheckoutReturn DTOs). It also gets a section that replaces the ISIMS adapter.
