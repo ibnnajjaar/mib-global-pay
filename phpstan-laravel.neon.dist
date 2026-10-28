@@ -7,3 +7,7 @@ parameters:
     paths:
         - src/Laravel
     tmpDir: build/phpstan-laravel
+    ignoreErrors:
+        # Used by host test cases, not by the package itself.
+        - identifier: trait.unused
+          path: src/Laravel/Testing/InteractsWithMibGlobalPay.php
