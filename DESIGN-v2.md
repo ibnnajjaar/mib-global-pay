@@ -261,7 +261,7 @@ The docs say: a match means "go and call `verifyCapture()`". It does **not** mea
 `CheckoutRequest` is immutable. It requires `orderId`, `Money amount`, `merchantName` and `returnUrl`, and has `with*()` for everything else.
 
 - **New requirement:** `notificationUrl` is required unless the host passes `withoutWebhook()` explicitly. ISIMS sends none today.
-- `orderId` is validated against the gateway's documented rule ("Data can consist of any characters", 1–40), plus a ban on control characters; identifiers are URL-encoded in paths. *(Stage 3; replaces the earlier `[A-Za-z0-9._-]` rule for request validation. Generated IDs stay within `[A-Za-z0-9._-]`, see §6.7 C. Pending confirmation, see the stage 3 questions.)* The docstring and README state: **never reuse an order ID once a session has been created for it** (§8).
+- `orderId` is validated against the gateway's documented rule ("Data can consist of any characters", 1–40), plus a ban on control characters; identifiers are URL-encoded in paths. *(Stage 3; replaces the earlier `[A-Za-z0-9._-]` rule for request validation. Generated IDs stay within `[A-Za-z0-9._-]`, see §6.7 C. **Decided:** keep this until MIB answers question 16.)* The docstring and README state: **never reuse an order ID once a session has been created for it** (§8).
 - The description no longer defaults silently. ISIMS hard-codes `'test'`, so the docs will show a real description.
 
 ---
@@ -329,7 +329,7 @@ It is auto-discovered through `extra.laravel.providers`. The core works without 
 | `webhook.enabled` | `MIB_WEBHOOK_ENABLED` (default true) | |
 | `webhook.path` | `MIB_WEBHOOK_PATH` (default `mib/webhook`) | |
 | `webhook.domain` | `MIB_WEBHOOK_DOMAIN` (default none) | **Decided:** route domain support, e.g. ISIMS's `students.<domain>` with path `payment-gateways/mib/webhook` |
-| `webhook.register_route` | `MIB_WEBHOOK_REGISTER_ROUTE` (default `true`) | **Proposed (open):** set false to register the route yourself (§6.2) |
+| `webhook.register_route` | `MIB_WEBHOOK_REGISTER_ROUTE` (default `true`) | **Decided:** set false so the package registers no route; the host registers it with the macro (§6.2) |
 | `webhook.queue` / `webhook.connection` | | Notifications are processed on a queue |
 | `checkout_js_url` | `MIB_CHECKOUT_JS_URL` | For the optional Blade redirect component |
 | `timeout` | `MIB_TIMEOUT` (default 30) | |
@@ -348,13 +348,13 @@ The provider binds `MibGateway` as a singleton and the `MibGlobalPay` facade. It
 ### 6.2 Webhook route, middleware and controller
 
 - `POST /{webhook.path}` on the optional `{webhook.domain}`, named `mib-global-pay.webhook`, exempt from CSRF and with no session middleware. Domain support is **decided** (ISIMS keeps `students.<domain>/payment-gateways/mib/webhook`, configured at MIB, and also sends it per order as `order.notificationUrl`).
-- **Proposed host-registered route (exact API open).** With `webhook.register_route = false`, the provider registers nothing, and the host places the route in its own route file and domain group:
+- **Host-registered route (decided).** With `webhook.register_route = false`, the provider registers nothing, and the host places the route in its own route file and domain group:
   ```php
   Route::domain('students.' . config('app.domain'))->group(function () {
       Route::mibGlobalPayWebhook('payment-gateways/mib/webhook'); // macro: POST, controller, middleware, route name
   });
   ```
-  The macro returns the `Illuminate\Routing\Route`, so hosts can chain `->name()` or `->middleware()`. Alternatives: a facade method `MibGlobalPay::webhookRoute($uri)`, or only the auto-registered route with domain and path config.
+  **Decided:** the macro `Route::mibGlobalPayWebhook($uri)` returns the `Illuminate\Routing\Route`, so hosts can chain `->name()` or `->middleware()`.
 - `VerifyNotificationSecret` middleware returns 401 if the secret check fails, and 400 for a malformed notification.
 - `WebhookController`:
   1. claims the notification ID; a duplicate gets a 200 response and nothing else happens;
@@ -671,7 +671,7 @@ Binding, in an ISIMS service provider: `$this->app->bind(PayableResolver::class,
 #### C. Attempt order IDs and AttemptGuard
 
 - **Format (decided, ISIMS feedback):** `{prefix}-{sanitise(payableReference)}-{attemptNumber}`. Example: receipt `(R)IUM/FN/2026/123`, attempt 2 → `ISIMS-R-IUM-FN-2026-123-2`.
-  - `sanitise()` turns every character outside `[A-Za-z0-9._-]` into `-`, brackets included. It then collapses runs of `-` and trims `-` from both ends. (The brief said "drop brackets", but its own example keeps `R-IUM`, so brackets become `-` like any other disallowed character, matching the example.)
+  - `sanitise()` turns every character outside `[A-Za-z0-9._-]` into `-`, brackets included. It then collapses runs of `-` and trims `-` from both ends. **Decided:** brackets become `-` like any other disallowed character.
   - **Random fallback only** if the result is still over 40 characters, or the sanitised reference is empty: `{prefix}-{16 base32 chars}` (80 random bits).
   - The unsanitised reference (`(R)IUM/FN/2026/123`) is always sent as `order.reference`, which allows any characters, 1–40.
   - Collisions are possible in principle: two references that differ only in disallowed characters sanitise to the same string. The host's `UNIQUE(gateway_order_id)` catches this, and the generator must then use the random fallback (stage 4).
@@ -746,7 +746,7 @@ Shared types used in the payloads:
 | `webhook.secret` | `MIB_WEBHOOK_SECRET`, with `MIB_WEBHOOK_SIGNATURE` as a deprecated fallback | required when the webhook is enabled |
 | `webhook.path` | `MIB_WEBHOOK_PATH` | `mib/webhook` |
 | `webhook.domain` | `MIB_WEBHOOK_DOMAIN` | none (decided) |
-| `webhook.register_route` | `MIB_WEBHOOK_REGISTER_ROUTE` | `true` **(open: exact API, §6.2)** |
+| `webhook.register_route` | `MIB_WEBHOOK_REGISTER_ROUTE` | `true` (decided; false + `Route::mibGlobalPayWebhook($uri)` for host-registered routes) |
 | `webhook.queue` / `webhook.connection` | `MIB_WEBHOOK_QUEUE` / `MIB_WEBHOOK_CONNECTION` | app default. Env names are provisional **(open)**. |
 | `notification_store` | `MIB_NOTIFICATION_STORE` | `database` |
 | `approval.accept_approved_auto` | `MIB_ACCEPT_APPROVED_AUTO` | `false` |
