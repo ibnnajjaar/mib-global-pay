@@ -12,4 +12,4 @@ services:
         volumes:
             - .:/app
         working_dir: /app
-        command: ["vendor/bin/phpunit", "-c", "phpunit.xml", "--colors=always"]
+        command: ["vendor/bin/pest", "--colors=always"]

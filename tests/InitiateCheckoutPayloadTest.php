@@ -4,6 +4,7 @@ namespace IbnNajjaar\MIBGlobalPay\Tests;
 
 use PHPUnit\Framework\TestCase;
 use IbnNajjaar\MIBGlobalPay\Support\Amount;
+use PHPUnit\Framework\Attributes\DataProvider;
 use IbnNajjaar\MIBGlobalPay\Requests\DataObjects\OrderData;
 use IbnNajjaar\MIBGlobalPay\Requests\CreateTransactionRequest;
 use IbnNajjaar\MIBGlobalPay\Support\Constants\InteractionOperation;
@@ -60,16 +61,14 @@ class InitiateCheckoutPayloadTest extends TestCase
         $this->assertSame('0.30', Amount::format(0.1 + 0.2));
     }
 
-    /**
-     * @dataProvider invalidAmounts
-     */
+    #[DataProvider('invalidAmounts')]
     public function test_invalid_amounts_throw($amount)
     {
         $this->expectException(\InvalidArgumentException::class);
         Amount::format($amount);
     }
 
-    public function invalidAmounts(): array
+    public static function invalidAmounts(): array
     {
         return [[0], [-1], ['0.00'], ['10.123'], [10.123], ['abc'], ['1e3'], [null], [''], [[]]];
     }
@@ -178,16 +177,14 @@ class InitiateCheckoutPayloadTest extends TestCase
         $this->assertSame('Hi', $this->payload($order)['order']['customerNote']);
     }
 
-    /**
-     * @dataProvider invalidOptionalFields
-     */
+    #[DataProvider('invalidOptionalFields')]
     public function test_invalid_optional_fields_throw(callable $set)
     {
         $this->expectException(\InvalidArgumentException::class);
         $set(OrderData::make('A', 10));
     }
 
-    public function invalidOptionalFields(): array
+    public static function invalidOptionalFields(): array
     {
         return [
             'custom key' => [function (OrderData $o) {

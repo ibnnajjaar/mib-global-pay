@@ -15,6 +15,7 @@ Version 2.0.0 is in development. See [DESIGN-v2.md](./DESIGN-v2.md). Version 1.2
 - **Breaking:** requires `guzzlehttp/guzzle` `^7.9` and `psr/http-message` `^2.0`. Guzzle 6 and `psr/http-message` 1.x are no longer supported.
 - `illuminate/support` (`^13.0`) is suggested for the planned optional Laravel 13 layer. It is not required.
 - `composer.json`: branch alias `dev-main` → `2.x-dev`.
+- Tooling: the test suite runs on Pest 4 (PHPUnit 12). Laravel Pint replaces php-cs-fixer, and PHPStan is added (level 1 for now). Orchestra Testbench and Larastan are added for the coming Laravel layer. CI and the Docker image now use PHP 8.4.
 
 ### Included from the unreleased 1.2 work
 #### Added

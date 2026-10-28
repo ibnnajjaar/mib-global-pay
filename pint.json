@@ -1,0 +1,13 @@
+{
+    "preset": "psr12",
+    "rules": {
+        "ordered_imports": {
+            "sort_algorithm": "length"
+        },
+        "ordered_traits": true,
+        "no_extra_blank_lines": {
+            "tokens": ["use"]
+        }
+    },
+    "exclude": ["vendor"]
+}

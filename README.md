@@ -609,12 +609,12 @@ docker compose build
 # Install dependencies inside the container (if vendor is not present or is outdated)
 docker compose run --rm php composer install
 
-# Run PHPUnit
+# Run the test suite (Pest)
 # Option A: Use the dedicated 'test' service
 docker compose run --rm test
 
 # Option B: Run via the php service (overriding the command)
-docker compose run --rm php vendor/bin/phpunit -c phpunit.xml --colors=always
+docker compose run --rm php vendor/bin/pest --colors=always
 ```
 
 ### Mocking HTTP in your tests

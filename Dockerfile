@@ -1,4 +1,4 @@
-FROM php:7.2-cli
+FROM php:8.4-cli
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo pdo_mysql
 
 # Install Xdebug for code coverage
-RUN pecl install xdebug-2.9.8 \
+RUN pecl install xdebug \
     && docker-php-ext-enable xdebug
 
 # Configure Xdebug for coverage (optional - creates xdebug.ini)

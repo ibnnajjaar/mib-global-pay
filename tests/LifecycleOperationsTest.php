@@ -4,6 +4,7 @@ namespace IbnNajjaar\MIBGlobalPay\Tests;
 
 use PHPUnit\Framework\TestCase;
 use IbnNajjaar\MIBGlobalPay\Support\Response;
+use PHPUnit\Framework\Attributes\DataProvider;
 use IbnNajjaar\MIBGlobalPay\MIBGlobalPayConnector;
 use IbnNajjaar\MIBGlobalPay\Support\TransactionId;
 use IbnNajjaar\MIBGlobalPay\Requests\GetTransactionRequest;
@@ -171,9 +172,7 @@ class LifecycleOperationsTest extends TestCase
         $this->assertSame('order/a%3Fb%20c', (new GetTransactionRequest('a?b c'))->resolveEndpoint());
     }
 
-    /**
-     * @dataProvider invalidOperations
-     */
+    #[DataProvider('invalidOperations')]
     public function test_validation_errors(callable $operation)
     {
         $connector = $this->connector([]);
@@ -186,7 +185,7 @@ class LifecycleOperationsTest extends TestCase
         }
     }
 
-    public function invalidOperations(): array
+    public static function invalidOperations(): array
     {
         $long = str_repeat('a', 41);
 

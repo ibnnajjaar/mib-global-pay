@@ -1,0 +1,7 @@
+# Level 1 is the highest level the 1.x code in src/ passes today.
+# Raise the level as the v2 code replaces it (target: max, plus Larastan for src/Laravel).
+parameters:
+    level: 1
+    paths:
+        - src
+    tmpDir: build/phpstan

@@ -9,12 +9,11 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    name: PHP ${{ matrix.php-version }} Tests${{ matrix.dependencies == 'lowest' && ' (lowest deps)' || '' }}
+    name: PHP ${{ matrix.php-version }} Tests
 
     strategy:
       matrix:
         php-version: ['8.4', '8.5']
-        dependencies: [highest]
       fail-fast: false
 
     steps:
@@ -36,28 +35,26 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor
-          key: ${{ runner.os }}-php-${{ matrix.php-version }}-${{ matrix.dependencies }}-${{ hashFiles('composer.json') }}
+          key: ${{ runner.os }}-php-${{ matrix.php-version }}-${{ hashFiles('composer.json') }}
           restore-keys: |
-            ${{ runner.os }}-php-${{ matrix.php-version }}-${{ matrix.dependencies }}-
+            ${{ runner.os }}-php-${{ matrix.php-version }}-
 
       - name: Install dependencies
-        if: matrix.dependencies == 'highest'
         run: composer update --prefer-dist --no-progress
 
-      - name: Install lowest dependencies
-        if: matrix.dependencies == 'lowest'
-        run: composer update --prefer-dist --no-progress --prefer-lowest --prefer-stable
+      - name: Static analysis
+        run: vendor/bin/phpstan analyse --no-progress
 
       - name: Run test suite
         run: |
-          if [[ "${{ startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '7.2' && matrix.dependencies == 'highest' }}" == "true" ]]; then
-            vendor/bin/phpunit tests --coverage-clover=clover.xml --whitelist=src
+          if [[ "${{ startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '8.4' }}" == "true" ]]; then
+            vendor/bin/pest --coverage-clover=clover.xml
           else
-            vendor/bin/phpunit tests
+            vendor/bin/pest
           fi
 
       - name: Make code coverage badge
-        if: startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '7.2' && matrix.dependencies == 'highest'
+        if: startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '8.4'
         uses: timkrase/phpunit-coverage-badge@v1.2.1
         with:
           coverage_badge_path: .github/coverage.svg
