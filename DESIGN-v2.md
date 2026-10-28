@@ -607,6 +607,14 @@ The payable (`invoice_payments`) gets `state`, `frozen_amount_minor`, `frozen_cu
 
 ### 6.6 Testing fake
 
+**Implemented in stage 7** (decided): everything is in `Laravel\Testing`.
+- **Defaults:** unstubbed calls are lenient and gateway-like, and `strict()` turns them into `LogicException`s.
+- **Installation:** `MibGlobalPay::fake()` rebinds the `Gateway` contract and refreshes the facade. The concrete `MibGateway` cannot be swapped, because it is `final` and the fake is a different class, so code must type-hint the contract.
+- **Stubs:** order stubs are returned in sequence and the last one repeats.
+- **Webhook helper:** `postMibNotification()` is available only through the `InteractsWithMibGlobalPay` trait.
+- **Assertions:** `assertCheckoutInitiated`, `assertCheckoutNotInitiated`, `assertOrderRetrieved`, `assertCaptured`, `assertRefunded`, `assertVoided`, `assertSent`, `assertNothingSent`, `sent()`.
+- **Factories:** `OrderFactory` (captured, authorizedOnly, declined, pending, partiallyRefunded, refunded, voided, withoutCapturedTotal) and `NotificationFactory` (paymentCaptured, paymentDeclined, refund, void, authentication, other).
+
 ```php
 MibGlobalPay::fake()
     ->checkoutSession('ORDER-1', sessionId: 'SESSION0001', successIndicator: 'abc')

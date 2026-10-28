@@ -39,6 +39,8 @@ Version 2.0.0 is in development. See [DESIGN-v2.md](./DESIGN-v2.md). Version 1.2
 
 - Documentation: v2 README, UPGRADE.md (1.1 → 2.0), and DESIGN-v2.md §6.7 marked final, with the items that still depend on MIB listed.
 
+- Testing support (`IbnNajjaar\MIBGlobalPay\Laravel\Testing`): `MibGlobalPay::fake()` returning `MibGlobalPayFake` (gateway-like defaults, `strict()`, `checkoutSession()`, sequenced `order()` stubs, `respondWith()`, and assertions), `OrderFactory`, `NotificationFactory`, and the `InteractsWithMibGlobalPay` trait with `postMibNotification()`.
+
 ### Included from the unreleased 1.2 work
 #### Added
 - Lifecycle operations on `MIBGlobalPayConnector`: `refund()`, `void()`, `capture()`, `updateAuthorization()` and `getTransactionDetails()`, backed by `RefundRequest`, `VoidRequest`, `CaptureRequest`, `UpdateAuthorizationRequest` and `RetrieveTransactionRequest`. All of them return `TransactionResponseData`.

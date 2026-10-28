@@ -20,6 +20,7 @@ proof.
 - [Installation](#installation)
 - [Core usage (any PHP app)](#core-usage-any-php-app)
 - [Laravel](#laravel)
+- [Testing your integration](#testing-your-integration)
 - [Money and currencies](#money-and-currencies)
 - [Errors](#errors)
 - [Security notes](#security-notes)
@@ -180,6 +181,57 @@ All keys: `config/mib-global-pay.php` (`php artisan vendor:publish --tag=mib-glo
 7. **Schedule** `mib:reconcile` (every few minutes) and `mib:prune-notifications` (daily).
 
 Double-capture auto-reversal is available but off: `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=true`.
+
+## Testing your integration
+
+`MibGlobalPay::fake()` replaces the gateway with an in-memory fake (no network) for the whole app:
+the facade, the webhook job, the outcome pipeline, `PaymentOutcome` and `mib:reconcile`. Requests
+are still validated against your configuration. Type-hint the `Core\Contracts\Gateway` contract in
+your own code; anything that type-hints the concrete `MibGateway` keeps the real client.
+
+```php
+use IbnNajjaar\MIBGlobalPay\Core\Money\Currency;
+use IbnNajjaar\MIBGlobalPay\Core\Money\Money;
+use IbnNajjaar\MIBGlobalPay\Laravel\Events\PaymentCaptured;
+use IbnNajjaar\MIBGlobalPay\Laravel\Facades\MibGlobalPay;
+use IbnNajjaar\MIBGlobalPay\Laravel\Testing\InteractsWithMibGlobalPay;
+use IbnNajjaar\MIBGlobalPay\Laravel\Testing\NotificationFactory;
+use IbnNajjaar\MIBGlobalPay\Laravel\Testing\OrderFactory;
+use Illuminate\Support\Facades\Event;
+
+uses(InteractsWithMibGlobalPay::class); // Pest; or `use InteractsWithMibGlobalPay;` in a PHPUnit test case
+
+it('pays the invoice when MIB reports the capture', function () {
+    $amount = Money::of('1250.50', Currency::Mvr);
+    $fake = MibGlobalPay::fake()->order('SHOP-R-INV-2026-123-1', OrderFactory::captured($amount));
+    Event::fake([PaymentCaptured::class]); // or let your real listeners run
+
+    $this->postMibNotification(NotificationFactory::paymentCaptured('SHOP-R-INV-2026-123-1', $amount))
+        ->assertOk();
+
+    Event::assertDispatched(PaymentCaptured::class);
+    $fake->assertOrderRetrieved('SHOP-R-INV-2026-123-1');
+});
+```
+
+- **Defaults for anything not stubbed:** Initiate Checkout returns a new session, an unknown order
+  is the gateway's 404 (`verifyCapture()` gives `NotFound`), Capture/Refund/Void/Update
+  Authorization are approved, Check Gateway is `OPERATING`. Call `->strict()` to make any
+  unstubbed call throw a `LogicException` instead.
+- **Stubs:** `checkoutSession(?$orderId, sessionId:, successIndicator:)`;
+  `order($orderId, ...$payloads)` (returned in sequence, then the last repeats, e.g.
+  `OrderFactory::pending($a), OrderFactory::captured($a)`); `respondWith(Capture::class, $payload|$exception|fn ($op) => ...)`.
+- **Order payloads:** `OrderFactory::captured`, `authorizedOnly`, `declined`, `pending`,
+  `partiallyRefunded`, `refunded`, `voided`, `withoutCapturedTotal`.
+- **Notifications:** `NotificationFactory::paymentCaptured`, `paymentDeclined`, `refund`, `void`,
+  `authentication`, `other(array)`; `postMibNotification($n, secret: ..., uri: ...)` posts to the
+  `mib-global-pay.webhook` route with your configured `MIB_WEBHOOK_SECRET`.
+- **Assertions:** `assertCheckoutInitiated(?fn (CheckoutRequest $r) => ...)`,
+  `assertCheckoutNotInitiated()`, `assertOrderRetrieved(?$orderId)`, `assertCaptured(?fn)`,
+  `assertRefunded(?fn)`, `assertVoided(?fn)`, `assertSent(Operation::class, ?fn)`,
+  `assertNothingSent()`, and `sent(?Operation::class)` to inspect.
+- The webhook URL that `newCheckoutRequest()` adds must be HTTPS: make sure your app generates
+  `https://` URLs in tests too (`URL::forceScheme('https')`, or an `https://` `APP_URL`).
 
 ## Money and currencies
 
