@@ -18,14 +18,17 @@
         }
     ],
     "require": {
-        "php": "^7.2|^8.0",
+        "php": "^8.4",
         "ext-json": "*",
-        "guzzlehttp/guzzle": "~6.0|~7.0",
-        "psr/http-message": "^1.0|^2.0"
+        "guzzlehttp/guzzle": "^7.9",
+        "psr/http-message": "^2.0"
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.4",
         "phpunit/phpunit": "^8.5.42"
+    },
+    "suggest": {
+        "illuminate/support": "Required (^13.0) for the optional Laravel 13 integration layer"
     },
     "autoload": {
         "psr-4": {
@@ -48,5 +51,10 @@
             "phpstan/extension-installer": true
         }
     },
-    "prefer-stable": true
+    "prefer-stable": true,
+    "extra": {
+        "branch-alias": {
+            "dev-main": "2.x-dev"
+        }
+    }
 }

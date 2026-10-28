@@ -7,8 +7,17 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Keep a Changelog: https://keepachangelog.com/en/1.1.0/
 - Semantic Versioning: https://semver.org/spec/v2.0.0.html
 
-## [1.2.0] - 2026-10-16
-### Added
+## [Unreleased]
+Version 2.0.0 is in development. See [DESIGN-v2.md](./DESIGN-v2.md). Version 1.2.0 was never released, so the changes listed under "Included from the unreleased 1.2 work" ship as part of 2.0.0.
+
+### Changed
+- **Breaking:** requires PHP `^8.4`. PHP 7.2 to 8.3 are no longer supported.
+- **Breaking:** requires `guzzlehttp/guzzle` `^7.9` and `psr/http-message` `^2.0`. Guzzle 6 and `psr/http-message` 1.x are no longer supported.
+- `illuminate/support` (`^13.0`) is suggested for the planned optional Laravel 13 layer. It is not required.
+- `composer.json`: branch alias `dev-main` → `2.x-dev`.
+
+### Included from the unreleased 1.2 work
+#### Added
 - Lifecycle operations on `MIBGlobalPayConnector`: `refund()`, `void()`, `capture()`, `updateAuthorization()` and `getTransactionDetails()`, backed by `RefundRequest`, `VoidRequest`, `CaptureRequest`, `UpdateAuthorizationRequest` and `RetrieveTransactionRequest`. All of them return `TransactionResponseData`.
 - `Support\TransactionId::generate()` / `validate()`, `Support\Amount::format()`, `Support\Path::segment()` and `Support\Arr`.
 - Constants: `OrderStatus`, `TransactionResult`, `TransactionType` and `InteractionOperation` (in `Support\Constants`).
@@ -22,7 +31,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Initiate Checkout options on `OrderData`: `setInteractionOperation()` (`PURCHASE`, `AUTHORIZE`, `VERIFY`, `NONE`), `setCustomField()`, `setThreeDSecureAction()`, `setCardSecurityCodeDisplay()`, `setLocale()`, `setTransactionSource()`, `setTransactionReference()` and `setExtraFields()`, all also supported in `fromArray()`.
 - CI job testing the lowest dependencies (Guzzle 6) on PHP 7.2.
 
-### Fixed
+#### Fixed
 - The webhook notification secret was lost (or reduced to its first character) when headers came from `getallheaders()`. Header lookup is now case-insensitive and accepts both plain and array values.
 - PHP warnings ("Undefined array key", "Trying to access array offset on null", `strtolower(null)`) on sparse webhook, order and transaction payloads, for example 3-D Secure `AUTHENTICATION` transactions without a `response`.
 - `WebhookResponseData::getOrderStatus()` called `strtolower(null)` when the status was missing.
@@ -37,7 +46,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - `MIBGlobalPayException` triggered a deprecation on PHP 8.4 (implicitly nullable `$previous`).
 - The `composer format` script pointed to Pint, which isn't installed. It now runs php-cs-fixer.
 
-### Changed
+#### Changed
 - `order.amount` is sent as a decimal string (`"100.50"`), as the API specifies.
 - `null` fields and empty objects are no longer sent in the Initiate Checkout payload. The hard-coded `"custom": null` was removed.
 - Order and transaction IDs are URL-encoded in endpoint paths (`GetTransactionRequest` included). Plain alphanumeric IDs produce the same URLs as before.
@@ -51,10 +60,10 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - `composer.json`: the PHP constraint is simplified to `^7.2|^8.0`, `psr/http-message` is now an explicit dependency, and `minimum-stability: dev` is removed.
 - CI: actions/checkout and actions/cache are bumped to v4, and the Composer cache is now per PHP version.
 
-### Deprecated
+#### Deprecated
 - `OrderResponseData::paymentSuccessfullyCaptured()`: it returns `false` once any refund is made. Use `isPaid()`.
 
-### Removed
+#### Removed
 - Unused private helpers `MIBGlobalPayConnector::normalizeOrderData()` and `BaseOrderData::validateUrl()` (no public API change).
 
 ## [1.1.0] - 2025-08-20
@@ -70,6 +79,6 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ## [1.0.1] - 2025-07-13
 - Previous patch release (prior to maintaining a formal changelog). Details may be found in Git history.
 
-[1.2.0]: https://github.com/ibnnajjaar/mib-global-pay/compare/v1.1.0...v1.2.0
+[Unreleased]: https://github.com/ibnnajjaar/mib-global-pay/compare/v1.1.0...HEAD
 [1.1.0]: https://github.com/ibnnajjaar/mib-global-pay/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/ibnnajjaar/mib-global-pay/compare/v1.0.0...v1.0.1
