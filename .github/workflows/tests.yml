@@ -42,8 +42,11 @@ jobs:
       - name: Install dependencies
         run: composer update --prefer-dist --no-progress
 
-      - name: Static analysis
+      - name: Static analysis (1.x, level 1)
         run: vendor/bin/phpstan analyse --no-progress
+
+      - name: Static analysis (v2 core, level max)
+        run: vendor/bin/phpstan analyse -c phpstan-core.neon.dist --no-progress
 
       - name: Run test suite
         run: |

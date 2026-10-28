@@ -17,6 +17,9 @@ Version 2.0.0 is in development. See [DESIGN-v2.md](./DESIGN-v2.md). Version 1.2
 - `composer.json`: branch alias `dev-main` → `2.x-dev`.
 - Tooling: the test suite runs on Pest 4 (PHPUnit 12). Laravel Pint replaces php-cs-fixer, and PHPStan is added (level 1 for now). Orchestra Testbench and Larastan are added for the coming Laravel layer. CI and the Docker image now use PHP 8.4.
 
+### Added
+- v2 core types under `IbnNajjaar\MIBGlobalPay\Core`: `Money` (minor units, explicit rounding, no float paths), the `Currency` enum (curated ISO 4217 subset), the gateway enums (`OrderStatus`, `TransactionType`, `Result`, `GatewayCode`, `GatewayRecommendation`) with an `Unrecognized` fallback, `ApprovalPolicy`, the null-safe `Payload` reader, `GatewayConfig` with environment presets, and the exception hierarchy (`MibGlobalPayException` marker interface). The 1.x API is unchanged.
+
 ### Included from the unreleased 1.2 work
 #### Added
 - Lifecycle operations on `MIBGlobalPayConnector`: `refund()`, `void()`, `capture()`, `updateAuthorization()` and `getTransactionDetails()`, backed by `RefundRequest`, `VoidRequest`, `CaptureRequest`, `UpdateAuthorizationRequest` and `RetrieveTransactionRequest`. All of them return `TransactionResponseData`.

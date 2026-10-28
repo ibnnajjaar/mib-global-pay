@@ -68,17 +68,40 @@ Namespace: `IbnNajjaar\MIBGlobalPay\` is kept, and `Core\` and `Laravel\` become
 - All DTOs and value objects are `final readonly class`, built by named constructors (`fromArray`, `fromResponse`).
 - No mutable setters. `OrderData` becomes an immutable builder: `with*()` methods return a clone.
 - PHP 8.4 features where they help:
-  - property hooks for derived read-only values, such as `Money::$formatted`;
+  - ~~property hooks for derived values such as `Money::$formatted`~~. PHP does not allow hooks on readonly properties, so readonly value objects use methods (`Money::toDecimal()`) instead (stage 2);
   - asymmetric visibility (`public private(set)`) on the few builders that need it;
   - `new` without parentheses in chains;
   - `array_find` / `array_any` in place of loops (`OrderResponse::findTransaction`).
 - No `mixed`, except at the decode boundary. Every payload is parsed once, null-safely, through a small `Payload` reader (`string()`, `?string()`, `money()`, `enum()`). The reader never emits notices. This fixes the ISIMS request about `fromArray` throwing notices when keys are missing.
-- Unknown enum values from the gateway map to an `Unknown` case, not an exception. The raw string stays available.
-- PHPStan level max (or Larastan for `src/Laravel`) in CI.
+- Unknown enum values from the gateway map to an `Unrecognized` case (backed by `''`) via a never-throwing `fromGateway(?string): self`, not an exception. The DTO keeps the raw string. The fallback is not named `Unknown`, because `Result` and `GatewayCode` have a real gateway value `UNKNOWN` (decided, stage 2).
+- PHPStan level max (or Larastan for `src/Laravel`) in CI. `src/Core` runs at `max` through `phpstan-core.neon.dist`; the 1.x code stays at level 1 until stage 8.
 
 ---
 
 ## 3. Enums and Money
+
+### 3.0 Decisions taken in stage 2 (core types)
+
+1. **Enum cases** are PascalCase, backed by the gateway's string, e.g. `GatewayCode::ApprovedPendingSettlement = 'APPROVED_PENDING_SETTLEMENT'`.
+2. **Fallback.** Every gateway enum (`Core\Enums\GatewayEnum`: OrderStatus, TransactionType, Result, GatewayCode, GatewayRecommendation, plus `Currency`) has `case Unrecognized = ''` and `fromGateway(?string): static`. That method never throws and matches case-insensitively, ignoring surrounding whitespace. `isRecognized()` tells the two apart. Config-only enums (`Environment`) have no fallback.
+3. **Currency** is a curated ISO 4217 subset with its minor-unit exponents, and no ICU dependency: AED 2, EUR 2, GBP 2, INR 2, JPY 0, KWD 3, LKR 2, MVR 2, SGD 2, USD 2. The docblock on `Core\Money\Currency` explains how to add one. The config allow-list defaults to `[MVR]`.
+4. **Rounding.** `Money::of()` rejects too many decimals with `InvalidAmount`. `Money::ofRounded(string, Currency, \RoundingMode)` rounds explicitly, using PHP 8.4's native `RoundingMode`.
+5. **Negative amounts.** `Money` may be negative. Request builders and operations enforce positive amounts.
+6. **JSON floats.** `Money::fromGateway(int|float|string)` and `Payload::money()` accept a float only if it is exactly representable with at most the currency's minor units. They check `sprintf('%.{n}F')` round-trips for n = 0…units, so the result does not depend on `serialize_precision`. Floats exist only at this decode step.
+7. **Environment presets.** `Test` uses `test-mib.mtf.gateway.mastercard.com`. `Production` has no preset (TODO pending MIB question 14), so `GatewayConfig` throws `ConfigurationException` unless a host is set.
+8. **Exceptions** implement the marker interface `Core\Exceptions\MibGlobalPayException` on SPL subclasses:
+   - `InvalidAmount`, `InvalidRequest`, `UnsupportedCurrency` extend `InvalidArgumentException`;
+   - `CurrencyMismatch`, `ConfigurationException`, `OperationNotEnabled` extend `DomainException`;
+   - `SecretMismatch`, `TransportException`, `GatewayException` extend `RuntimeException`;
+   - `MalformedNotification`, `MalformedPayload` extend `UnexpectedValueException`.
+9. **`GatewayConfig`:**
+   - `orderPrefix` is required: 1–10 characters `[A-Za-z0-9]`, no default.
+   - Approval is an `ApprovalPolicy` value with `acceptApprovedAuto` defaulting to false.
+   - Other defaults: API version 100, timeout 30 s, allow-list `[MVR]`, default currency MVR, `allowInsecureUrls` false.
+   - The gateway host must be HTTPS.
+   - The password is redacted from `__debugInfo()`.
+
+**Pending (stage 4):** the enum helpers listed under §3.1 (`OrderStatus::isFinal()`, `isMoneyHeld()`, `TransactionType::isVoid()`, `isMoneyIn()`) need exact definitions, and are deferred to the verification stage. `GatewayCode::isApproved()` is replaced by `ApprovalPolicy`, because approval depends on the `APPROVED_AUTO` opt-in.
 
 ### 3.1 Backed enums (`Core/Enums`)
 
@@ -102,14 +125,16 @@ Helper methods live on the enums:
 In v1, `paymentIsSuccessful()` and `hasPaidTransaction()` required gatewayCode `=== 'approved'`, while `isApproved()` accepted any `approved*` prefix. v2 replaces both with **one** rule, used everywhere: return URL, webhook and Retrieve Order.
 
 ```php
-// Core/Verification/Approval.php
-public static function isApproved(Result $result, GatewayCode $code): bool
+// Core/Verification/ApprovalPolicy.php (implemented in stage 2)
+final readonly class ApprovalPolicy
 {
-    return $result === Result::SUCCESS && $code->isApproved();
-}
+    public function __construct(public bool $acceptApprovedAuto = false) {}
 
-// GatewayCode::isApproved(): an explicit allow-list, NOT a prefix match
-return in_array($this, [self::APPROVED, self::APPROVED_PENDING_SETTLEMENT], true);
+    /** APPROVED, APPROVED_PENDING_SETTLEMENT (+ APPROVED_AUTO when opted in). NOT a prefix match. */
+    public function approvedCodes(): array;
+
+    public function isApproved(Result $result, GatewayCode $code): bool; // Result::Success && in approvedCodes()
+}
 ```
 
 The prefix match is dropped, because a new gateway code starting with `APPROVED_` must not silently count as money received.
@@ -126,7 +151,7 @@ The v100 Retrieve Order reference (`transaction[n].response.gatewayCode`) lists 
 
 The full v100 enum is: ABORTED, ACQUIRER_SYSTEM_ERROR, APPROVED, APPROVED_AUTO, APPROVED_PENDING_SETTLEMENT, AUTHENTICATION_FAILED, AUTHENTICATION_IN_PROGRESS, BALANCE_AVAILABLE, BALANCE_UNKNOWN, BLOCKED, CANCELLED, DECLINED, DECLINED_AVS, DECLINED_AVS_CSC, DECLINED_CSC, DECLINED_DO_NOT_CONTACT, DECLINED_INVALID_PIN, DECLINED_PAYMENT_PLAN, DECLINED_PIN_REQUIRED, DEFERRED_TRANSACTION_RECEIVED, DUPLICATE_BATCH, EXCEEDED_RETRY_LIMIT, EXPIRED_CARD, INSUFFICIENT_FUNDS, INVALID_CSC, LOCK_FAILURE, NOT_ENROLLED_3D_SECURE, NOT_SUPPORTED, NO_BALANCE, PARTIALLY_APPROVED, PENDING, REFERRED, SUBMITTED, SYSTEM_ERROR, TIMED_OUT, UNKNOWN, UNSPECIFIED_FAILURE.
 
-`GatewayCode` mirrors this list, with `Unknown` as a fallback. `Result` in v100 has FAILURE, PENDING, SUCCESS and UNKNOWN; ERROR appears only in older payloads, so it is kept for safety. `gatewayRecommendation` (PROCEED, DO_NOT_PROCEED, RESUBMIT_WITH_3DS, …) is exposed as its own enum.
+`GatewayCode` mirrors this list, with `Unrecognized` as the fallback (the real `UNKNOWN` value is `GatewayCode::Unknown`). `Result` in v100 has FAILURE, PENDING, SUCCESS and UNKNOWN; ERROR appears only in older payloads, so it is kept for safety. `gatewayRecommendation` (PROCEED, DO_NOT_PROCEED, RESUBMIT_WITH_3DS, …) is exposed as its own enum.
 
 "Money captured" is a stronger condition than "approved". It means an approved transaction of type `PAYMENT` or `CAPTURE`, and an order whose `totalCapturedAmount` is greater than zero.
 
@@ -134,9 +159,9 @@ The full v100 enum is: ABORTED, ACQUIRER_SYSTEM_ERROR, APPROVED, APPROVED_AUTO, 
 
 `final readonly class Money { int $minor; Currency $currency; }`
 
-- Built from a string, `Money::of('100.50', Currency::MVR)`, or from minor units, `Money::ofMinor(10050, Currency::MVR)`.
-- **There is no float constructor.** Gateway JSON numbers are parsed from the decoded value with `JSON_BIGINT_AS_STRING` and string arithmetic. They are never cast with `(float)`.
-- Comparisons: `equals()`, `isZero()`, `greaterThan()`, `minus()`. Comparing different currencies throws `CurrencyMismatch`.
+- Built from a string, `Money::of('100.50', Currency::Mvr)`, or from minor units, `Money::ofMinor(10050, Currency::Mvr)`. Explicit rounding: `Money::ofRounded('1.005', Currency::Mvr, RoundingMode::HalfEven)`. Gateway values: `Money::fromGateway(int|float|string, Currency)`.
+- **There is no float constructor.** A decoded JSON float is accepted only by `fromGateway()`, and only when it is exactly representable at the currency's precision (§3.0 point 6).
+- Arithmetic and comparison: `plus()`, `minus()`, `negate()`, `abs()`, `equals()` (never throws), `compare()`, `greaterThan()`, `greaterThanOrEqual()`, `lessThan()`, `lessThanOrEqual()`, `isZero()`, `isPositive()`, `isNegative()`. Combining or ordering different currencies throws `CurrencyMismatch`, and overflow throws `InvalidAmount`.
 - Serialised to the API as a decimal string with the currency's precision (2 for MVR and USD).
 
 ---

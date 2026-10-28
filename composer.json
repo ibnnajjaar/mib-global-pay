@@ -48,7 +48,10 @@
         "test-coverage": "vendor/bin/pest --coverage-clover=coverage.xml",
         "format": "vendor/bin/pint",
         "lint": "vendor/bin/pint --test",
-        "analyse": "vendor/bin/phpstan analyse"
+        "analyse": [
+            "vendor/bin/phpstan analyse",
+            "vendor/bin/phpstan analyse -c phpstan-core.neon.dist"
+        ]
     },
     "config": {
         "sort-packages": true,

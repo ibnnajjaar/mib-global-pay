@@ -1,7 +1,9 @@
-# Level 1 is the highest level the 1.x code in src/ passes today.
-# Raise the level as the v2 code replaces it (target: max, plus Larastan for src/Laravel).
+# 1.x code: level 1 is the highest level it passes today. It is removed in stage 8.
+# The v2 code in src/Core is analysed at level max by phpstan-core.neon.dist.
 parameters:
     level: 1
     paths:
         - src
+    excludePaths:
+        - src/Core
     tmpDir: build/phpstan
