@@ -18,6 +18,8 @@ final class InMemoryPayable implements Payable
 {
     public int $locks = 0;
 
+    public bool $inLock = false;
+
     /** @param list<Attempt> $attempts newest first */
     public function __construct(
         public Money $expected,
@@ -56,7 +58,12 @@ final class InMemoryPayable implements Payable
     public function lock(Closure $callback): mixed
     {
         $this->locks++;
+        $this->inLock = true;
 
-        return $callback();
+        try {
+            return $callback();
+        } finally {
+            $this->inLock = false;
+        }
     }
 }

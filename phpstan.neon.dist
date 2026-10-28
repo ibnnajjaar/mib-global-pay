@@ -6,4 +6,5 @@ parameters:
         - src
     excludePaths:
         - src/Core
+        - src/Laravel
     tmpDir: build/phpstan

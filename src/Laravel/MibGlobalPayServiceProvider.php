@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace IbnNajjaar\MIBGlobalPay\Laravel;
 
+use Illuminate\Routing\Route;
+use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 use IbnNajjaar\MIBGlobalPay\Core\MibGateway;
@@ -12,8 +14,16 @@ use IbnNajjaar\MIBGlobalPay\Core\Contracts\Gateway;
 use IbnNajjaar\MIBGlobalPay\Laravel\Support\Settings;
 use IbnNajjaar\MIBGlobalPay\Core\Config\GatewayConfig;
 use IbnNajjaar\MIBGlobalPay\Core\Support\GatewayOrderId;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use IbnNajjaar\MIBGlobalPay\Core\Webhook\NotificationStore;
 use IbnNajjaar\MIBGlobalPay\Core\Contracts\OrderIdGenerator;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use IbnNajjaar\MIBGlobalPay\Core\Webhook\NotificationVerifier;
+use IbnNajjaar\MIBGlobalPay\Laravel\Stores\CacheNotificationStore;
+use IbnNajjaar\MIBGlobalPay\Core\Exceptions\ConfigurationException;
+use IbnNajjaar\MIBGlobalPay\Laravel\Stores\DatabaseNotificationStore;
+use IbnNajjaar\MIBGlobalPay\Laravel\Http\Controllers\WebhookController;
+use IbnNajjaar\MIBGlobalPay\Laravel\Http\Middleware\VerifyNotificationSecret;
 
 /**
  * Auto-discovered through extra.laravel.providers.
@@ -52,14 +62,63 @@ class MibGlobalPayServiceProvider extends ServiceProvider
         });
 
         $this->app->singleton(MibGlobalPay::class);
+
+        $this->app->singleton(NotificationStore::class, function (Application $app): NotificationStore {
+            return match ($store = $app->make(Settings::class)->notificationStore()) {
+                'database' => new DatabaseNotificationStore($app->make('db')->connection()),
+                'cache' => new CacheNotificationStore($app->make('cache')->store()),
+                default => throw new ConfigurationException("Unknown notification_store \"{$store}\"; expected \"database\" or \"cache\""),
+            };
+        });
     }
 
     public function boot(): void
     {
+        $this->registerRouteMacro();
+
+        $settings = $this->app->make(Settings::class);
+        if ($settings->webhookEnabled() && $settings->registerRoute() && ! $this->app->routesAreCached()) {
+            $route = self::webhookRoute($this->app->make(Router::class), $settings->webhookPath());
+
+            if ($settings->webhookDomain() !== null) {
+                $route->domain($settings->webhookDomain());
+            }
+        }
+
         if ($this->app->runningInConsole()) {
             $this->publishes([
                 __DIR__ . '/../../config/mib-global-pay.php' => $this->app->configPath('mib-global-pay.php'),
             ], 'mib-global-pay-config');
+
+            $this->publishesMigrations([
+                __DIR__ . '/../../database/migrations' => $this->app->databasePath('migrations'),
+            ], 'mib-global-pay-migrations');
         }
+    }
+
+    /**
+     * Route::mibGlobalPayWebhook($uri): POST, the package controller and secret middleware,
+     * named mib-global-pay.webhook, without CSRF. Returns the Route so hosts can register it in
+     * their own route file and domain group (set webhook.register_route to false).
+     */
+    private function registerRouteMacro(): void
+    {
+        if (Router::hasMacro('mibGlobalPayWebhook')) {
+            return;
+        }
+
+        Router::macro('mibGlobalPayWebhook', function (string $uri): Route {
+            /** @var Router $this */
+            return MibGlobalPayServiceProvider::webhookRoute($this, $uri);
+        });
+    }
+
+    /** @internal the body of the Route::mibGlobalPayWebhook() macro */
+    public static function webhookRoute(Router $router, string $uri): Route
+    {
+        return $router->post($uri, WebhookController::class)
+            ->name(MibGlobalPay::WEBHOOK_ROUTE_NAME)
+            ->middleware(VerifyNotificationSecret::class)
+            ->withoutMiddleware([ValidateCsrfToken::class, VerifyCsrfToken::class]);
     }
 }

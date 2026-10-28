@@ -9,6 +9,22 @@ use IbnNajjaar\MIBGlobalPay\Laravel\MibGlobalPayServiceProvider;
 
 abstract class TestCase extends Orchestra
 {
+    /** @var array<string, mixed> config overrides applied at boot; reset after each test */
+    public static array $config = [];
+
+    protected function tearDown(): void
+    {
+        static::$config = [];
+        parent::tearDown();
+    }
+
+    /** Re-boot the application with config overrides (for settings read at boot, e.g. routes). */
+    public function bootWith(array $config): void
+    {
+        static::$config = $config;
+        $this->refreshApplication();
+    }
+
     protected function getPackageProviders($app): array
     {
         return [MibGlobalPayServiceProvider::class];
@@ -29,5 +45,9 @@ abstract class TestCase extends Orchestra
         $app['config']->set('cache.default', 'array');
         $app['config']->set('queue.default', 'sync');
         $app['config']->set('app.url', 'https://students.ium.test');
+
+        foreach (static::$config as $key => $value) {
+            $app['config']->set($key, $value);
+        }
     }
 }

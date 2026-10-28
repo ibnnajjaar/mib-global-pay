@@ -13,3 +13,4 @@ declare(strict_types=1);
 */
 
 uses(IbnNajjaar\MIBGlobalPay\Tests\Laravel\TestCase::class)->in('Laravel');
+require_once __DIR__ . '/Laravel/Support/helpers.php';
