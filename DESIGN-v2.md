@@ -290,7 +290,7 @@ It is auto-discovered through `extra.laravel.providers`. The core works without 
 | `webhook.queue` / `webhook.connection` | | Notifications are processed on a queue |
 | `checkout_js_url` | `MIB_CHECKOUT_JS_URL` | For the optional Blade redirect component |
 | `timeout` | `MIB_TIMEOUT` (default 30) | |
-| `currency` | `MIB_CURRENCY` (default MVR) | |
+| `currency` | `MIB_CURRENCY` (default MVR) | Default currency for new checkouts; must be in `currencies` |
 | `notification_store` | | `database` (default) or `cache` |
 | `logging.channel` | `MIB_LOG_CHANNEL` | PSR-3; request and response logging with secrets redacted |
 | `environment` | `MIB_ENVIRONMENT` (`test` / `production`) | Preset host; `host` overrides it (Q6) |
@@ -314,7 +314,7 @@ The provider binds `MibGateway` as a singleton and the `MibGlobalPay` facade. It
   1. dispatches `NotificationReceived` (raw, for audit);
   2. ignores non-money-in types (refund or void notifications dispatch their own events, §6.3);
   3. calls `PayableResolver::resolveAttempt($orderId)`, which works for any attempt of the payable (§6.5);
-  4. calls `verifyCapture($orderId, $payable->expected)`, which re-reads the order from the gateway;
+  4. calls `verifyCapture($orderId, $payable->expectedAmount())`, which re-reads the order from the gateway;
   5. **takes the host's lock** (`$payable->lock()`; see §6.5) and re-checks payability inside the lock;
   6. dispatches exactly one outcome event (§6.3);
   7. marks the notification as processed.
@@ -323,7 +323,7 @@ The provider binds `MibGateway` as a singleton and the `MibGlobalPay` facade. It
 
 ### 6.3 Events
 
-All events are readonly. Each carries the `orderId`, the `Payable`, the `VerificationResult` and the `Notification` (if any).
+All events are `final readonly` classes. Their exact payload properties are listed in §6.7 D.
 
 | Event | When |
 |---|---|
@@ -349,6 +349,8 @@ The package **never** marks anything paid. It only fires events. The host's list
 - Pruning: a `MassPrunable` model, or `mib:prune-notifications --days=30`.
 
 ### 6.5 Host contract
+
+> Where §6.5 and §6.7 differ, **§6.7 is authoritative**. It holds the exact signatures, columns, events and config handed to ISIMS.
 
 ```php
 namespace IbnNajjaar\MIBGlobalPay\Laravel\Contracts;
@@ -437,7 +439,7 @@ interface Attempt
   3. `RefundProcessed` or `VoidProcessed` follows.
   - **Decided (Q19):** `CaptureMismatch(reason: DoubleCapture)` always fires. The package also ships an optional `AutoReverseDoubleCapture` listener (void, falling back to refund) that is **off by default** (`MIB_AUTO_REVERSE_DOUBLE_CAPTURE=false`). With it off, the host or finance reverses manually.
 - `CaptureMismatch` and `PaymentCapturedForUnpayableOrder` always carry the `VerificationResult`, so the host can show exact amounts.
-- The resolver is bound by the host in a service provider, `$this->app->bind(PayableResolver::class, IsimsPayableResolver::class)`. If it is unbound, the webhook route stays disabled and an exception is thrown with a clear message.
+- The binding and the full interface signatures are in §6.7. The resolver is bound by the host in a service provider, `$this->app->bind(PayableResolver::class, IsimsPayableResolver::class)`. If it is unbound, the webhook route stays disabled and an exception is thrown with a clear message.
 
 #### Attempts table ISIMS will need (described here, built in ISIMS)
 
@@ -460,7 +462,7 @@ interface Attempt
 | `last_verified_at` | timestamp nullable | for reconciliation |
 | timestamps | | |
 
-The payable (`invoice_payments`) gets `state`, `frozen_amount_minor`, `frozen_currency` and `settled_attempt_id` (nullable FK). The frozen invoice links stay on the payable, not on attempts.
+The payable (`invoice_payments`) gets `state`, `frozen_amount_minor`, `frozen_currency` and `settled_attempt_id` (nullable FK). The frozen invoice set belongs to the payable, not to the attempts, and is immutable while the payable is frozen (§6.7 A).
 
 ### 6.6 Testing fake
 
@@ -479,6 +481,224 @@ Event::assertDispatched(PaymentCaptured::class);
 - `OrderFactory` and `NotificationFactory` build realistic payloads, with fixtures taken from the sandbox.
 - The `postMibNotification()` test helper signs the request with the configured secret.
 - Assertions: `assertCheckoutInitiated`, `assertRefunded`, `assertVoided`, `assertNothingSent`.
+
+### 6.7 ISIMS integration contract
+
+This section is self-contained, so it can be handed to the ISIMS side as it stands.
+
+- Status: **PROVISIONAL** until the v2.0 Laravel-layer stage is merged. Items marked **(open)** may still change.
+- Namespaces:
+  - core: `IbnNajjaar\MIBGlobalPay\Core\…`
+  - Laravel: `IbnNajjaar\MIBGlobalPay\Laravel\…`
+
+#### A. Database (built by ISIMS; the package ships no host tables)
+
+**New table `invoice_payment_attempts`** (the name is ISIMS's choice; the package only uses the interfaces in §B)
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `id` | `bigIncrements` | no | PK |
+| `invoice_payment_id` | `foreignId` → `invoice_payments.id` | no | `restrictOnDelete` (never cascade-delete gateway history) |
+| `attempt_number` | `unsignedInteger` | no | 1, 2, 3 … per payable |
+| `gateway_order_id` | `string(40)` | no | the `order.id` sent to MIB, never reused |
+| `session_id` | `string(35)` | yes | from Initiate Checkout |
+| `success_indicator` | `string(32)` | yes | compared timing-safe on return |
+| `session_version` | `string(10)` | yes | |
+| `amount_minor` | `unsignedBigInteger` | no | the frozen amount sent to MIB, in minor units (laari) |
+| `currency` | `char(3)` | no | e.g. `MVR` |
+| `state` | `string(20)` | no | `AttemptState` value: created, live, captured, failed, expired, superseded |
+| `gateway_status` | `string(40)` | yes | last verified `order.status` |
+| `gateway_result` | `string(20)` | yes | last verified `result` |
+| `gateway_code` | `string(40)` | yes | last verified `response.gatewayCode` |
+| `captured_transaction_id` | `string(40)` | yes | set when this attempt captured |
+| `captured_amount_minor` | `unsignedBigInteger` | yes | as verified |
+| `expires_at` | `timestamp` | no | `created_at` + `interaction.timeout` + grace |
+| `last_verified_at` | `timestamp` | yes | |
+| `created_at`, `updated_at` | `timestamps` | | |
+
+Indexes and constraints on `invoice_payment_attempts`:
+
+- `UNIQUE (gateway_order_id)`
+- `UNIQUE (invoice_payment_id, attempt_number)`
+- `INDEX (state, expires_at)`, for `mib:reconcile`
+- `INDEX (session_id)`
+
+**New columns on `invoice_payments` (the payable)**
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `state` | `string(20)` | no, default `open` | `PayableState` value: open, frozen, cancelled, failed, paid. ISIMS may map this onto its existing status column instead **(open, ISIMS choice)**. |
+| `frozen_amount_minor` | `unsignedBigInteger` | yes | set when frozen; `expectedAmount()` returns this |
+| `frozen_currency` | `char(3)` | yes | |
+| `frozen_at` | `timestamp` | yes | |
+| `settled_attempt_id` | `foreignId` → `invoice_payment_attempts.id` | yes | `UNIQUE`; set once, on `PaymentCaptured` |
+| `settled_transaction_id` | `string(40)` | yes | |
+
+**Frozen invoice set (host-neutral rule).** While a payable is `Frozen`, the host must keep its set of invoices **immutable**. No invoice may be added, removed or moved to another payable until the payable leaves `Frozen`, either because it was paid or because it was cancelled after a final, non-captured verification. The set belongs to the payable, not to the attempts.
+
+- The package never reads invoices. It only relies on `expectedAmount()` and on the host honouring this rule inside `lock()`.
+- **ISIMS's model, which is the case to design for:** ISIMS has **no invoice pivot**. Each invoice points to one payment through `invoices.invoice_payment_id`, and `invoice_payments.invoice_ids` (JSON) records the original list. With an FK on the invoice, moving an invoice to another payment overwrites the only live link. That is exactly how a second payment can "take" the invoices of a frozen one.
+  - So ISIMS must refuse any change to `invoices.invoice_payment_id` while the owning payable is `Frozen`, and do the check under the payable's lock.
+  - It should also treat `invoice_payments.invoice_ids` as the frozen snapshot, which Policy A ("all original invoices still unpaid") reads.
+- How and where ISIMS stores the frozen set is an **ISIMS design choice (open)**. Options include the existing `invoice_ids` JSON as the snapshot plus a guard on the FK, a dedicated snapshot table, or a lock column on `invoices`.
+
+`receipt_no` is sent as `order.reference` on every attempt. `transaction_id` is no longer the gateway order ID; that moves to `invoice_payment_attempts.gateway_order_id`.
+
+#### B. Interfaces (implemented by ISIMS)
+
+```php
+declare(strict_types=1);
+
+namespace IbnNajjaar\MIBGlobalPay\Laravel\Contracts;
+
+use Closure;
+use IbnNajjaar\MIBGlobalPay\Core\Money\Money;
+use IbnNajjaar\MIBGlobalPay\Laravel\Enums\AttemptState;
+use IbnNajjaar\MIBGlobalPay\Laravel\Enums\PayableState;
+use IbnNajjaar\MIBGlobalPay\Laravel\Data\ResolvedAttempt;
+use IbnNajjaar\MIBGlobalPay\Laravel\Data\Settlement;
+
+interface PayableResolver
+{
+    /** Any attempt's gateway order id → its payable + attempt; null if unknown to the host. */
+    public function resolveAttempt(string $gatewayOrderId): ?ResolvedAttempt;
+
+    /** Attempts in state Created/Live (or Expired without a final verified status), for mib:reconcile. */
+    public function awaitingGateway(): iterable; // iterable<ResolvedAttempt>
+}
+
+interface Payable
+{
+    /** Stable host reference (ISIMS: receipt_no). Sent as order.reference. Max 40 chars. */
+    public function payableReference(): string;
+
+    /** Frozen amount; identical for every attempt. Never a recomputed invoice total. */
+    public function expectedAmount(): Money;
+
+    public function payableState(): PayableState;
+
+    public function settledBy(): ?Settlement;
+
+    /** @return iterable<Attempt> newest first */
+    public function attempts(): iterable;
+
+    /**
+     * Run $callback holding the host's row lock on the payable
+     * (ISIMS: DB::transaction + lockForUpdate on invoice_payments). Must re-read state inside.
+     * @template T
+     * @param Closure(): T $callback
+     * @return T
+     */
+    public function lock(Closure $callback): mixed;
+}
+
+interface Attempt
+{
+    public function attemptNumber(): int;
+    public function gatewayOrderId(): string;
+    public function sessionId(): ?string;
+    public function successIndicator(): ?string;
+    public function amount(): Money;
+    public function state(): AttemptState;
+    public function expiresAt(): \DateTimeImmutable;
+}
+```
+
+```php
+namespace IbnNajjaar\MIBGlobalPay\Laravel\Enums;
+
+enum PayableState: string { case Open = 'open'; case Frozen = 'frozen'; case Cancelled = 'cancelled'; case Failed = 'failed'; case Paid = 'paid'; }
+enum AttemptState: string { case Created = 'created'; case Live = 'live'; case Captured = 'captured'; case Failed = 'failed'; case Expired = 'expired'; case Superseded = 'superseded'; }
+
+namespace IbnNajjaar\MIBGlobalPay\Laravel\Data;
+
+final readonly class ResolvedAttempt { public function __construct(public Payable $payable, public Attempt $attempt) {} }
+final readonly class Settlement { public function __construct(public string $gatewayOrderId, public string $transactionId, public Money $amount, public \DateTimeImmutable $settledAt) {} }
+```
+
+Binding, in an ISIMS service provider: `$this->app->bind(PayableResolver::class, IsimsPayableResolver::class);`. While this is unbound, the webhook route is disabled.
+
+#### C. Attempt order IDs and AttemptGuard
+
+- **Format:** `{prefix}-{payableReference}-{attemptNumber}`, e.g. `ISIMS-R2026001234-2`.
+  - If it is longer than 40 characters, or contains characters outside `[A-Za-z0-9._-]`, the fallback is `{prefix}-{16 base32 chars}` (80 random bits). The reference then travels only in `order.reference`.
+  - Generated by `Core\Support\GatewayOrderId::forAttempt(string $prefix, string $payableReference, int $attemptNumber): string`.
+  - It can be replaced by binding `Core\Contracts\OrderIdGenerator`.
+  - The prefix comes from `MIB_ORDER_PREFIX`, which is required, 1–10 characters. Use different prefixes for test and production. **Decided:** there is no default; the package throws a configuration error if the prefix is unset.
+- **Uniqueness** is enforced by the host's `UNIQUE (gateway_order_id)`. An ID is never reused, even after failure or expiry.
+- **Sequence:**
+  1. Inside `lock()`, insert the attempt row with state `created`.
+  2. Call `initiateCheckout`.
+  3. On success, store `session_id`, `success_indicator` and `session_version`, and set state to `live`. On failure, set state to `failed`; that order ID is burned.
+- **`AttemptGuard::canStartNewAttempt(Payable $p, MibGateway $g): GuardResult`** runs inside `lock()`. It allows a new attempt only when all of these hold:
+  1. `payableState()` is `Open` or `Frozen`;
+  2. `settledBy()` is null, and no attempt is in state `Captured`;
+  3. every earlier attempt is either `Failed`, or has been verified by `verifyCapture()` with a final non-captured status, or is past `expiresAt()` and verified `NotCaptured`;
+  4. if any earlier attempt verifies `Captured` or `Pending`, it refuses with the reason. A `Captured` result also triggers the normal capture pipeline.
+  - When it allows, earlier `Live` or `Expired` attempts are marked `Superseded`.
+  - The `GuardResult` carries `allowed: bool`, `reason: ?GuardRefusal`, and `nextAttemptNumber: int`.
+- **Reuse rule:** while the newest attempt is `Live` and not expired, re-display its session instead of creating a new attempt. `retrieveSession()` can confirm the session's `order.id` and `order.amount`.
+
+#### D. Events (`IbnNajjaar\MIBGlobalPay\Laravel\Events\*`, all `final readonly`)
+
+Shared types used in the payloads:
+
+- `Source` is an enum: `Webhook`, `ReturnUrl`, `Reconcile`, `Manual`.
+- `VerificationResult` carries `status: VerificationStatus`, `expected: Money`, `captured: Money`, `refunded: Money`, `order: OrderResponse`.
+- `Notification` is the verified webhook. It has `id`, `attempt` and `raw()`.
+
+| Event | Properties |
+|---|---|
+| `NotificationReceived` | `Notification $notification` |
+| `PaymentCaptured` | `string $gatewayOrderId, Payable $payable, Attempt $attempt, VerificationResult $verification, string $transactionId, Source $source, ?Notification $notification` |
+| `PaymentCapturedForUnpayableOrder` | the same as `PaymentCaptured`, plus `PayableState $stateAtCapture` |
+| `CaptureMismatch` | `string $gatewayOrderId, Payable $payable, Attempt $attempt, VerificationResult $verification, MismatchReason $reason /* AmountMismatch, CurrencyMismatch, DoubleCapture */, ?Settlement $existingSettlement /* set for DoubleCapture */, ?string $transactionId, Source $source, ?Notification $notification` |
+| `PaymentPending` | `string $gatewayOrderId, Payable $payable, Attempt $attempt, VerificationResult $verification, Source $source, ?Notification $notification` |
+| `PaymentFailed` | the same as `PaymentPending`, plus `?GatewayCode $gatewayCode` |
+| `PaymentReversed` | the same as `PaymentPending`, plus `Money $reversedAmount` |
+| `UnknownOrderNotification` | `string $gatewayOrderId, Notification $notification` |
+| `RefundProcessed` / `VoidProcessed` | `string $gatewayOrderId, ?ResolvedAttempt $resolved, TransactionResponse $transaction, Source $source, ?Notification $notification` |
+
+#### E. Outcome table (evaluated inside `Payable::lock()`, after `verifyCapture()` against `expectedAmount()`)
+
+| Verification | Payable state | Settlement | Event fired |
+|---|---|---|---|
+| `Captured` | `Open` / `Frozen` | none | `PaymentCaptured`. ISIMS marks the payable paid and sets `settled_attempt_id` / `settled_transaction_id`. |
+| `Captured` | `Paid` | same order + transaction | nothing (idempotent) |
+| `Captured` | `Paid` | different attempt or transaction | `CaptureMismatch(DoubleCapture)`. If `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=true`, the `AutoReverseDoubleCapture` listener voids that capture, or refunds it if the void fails. |
+| `Captured` | `Cancelled` / `Failed` | — | `PaymentCapturedForUnpayableOrder`. ISIMS re-links the original invoices only if they are all still unpaid; otherwise it flags the payable `captured_after_cancel`. |
+| `AmountMismatch` / `CurrencyMismatch` | any | — | `CaptureMismatch(AmountMismatch / CurrencyMismatch)`, never auto-paid |
+| `Pending` | any | — | `PaymentPending`; the payable stays frozen |
+| `NotCaptured`, final | any | — | `PaymentFailed`. ISIMS may mark the attempt failed, and may cancel the payable only if no other attempt is live. |
+| `Reversed` | any | — | `PaymentReversed` |
+| `NotFound`, or the resolver returns null | — | — | `UnknownOrderNotification` |
+
+#### F. Config and env keys (`config/mib-global-pay.php`)
+
+| Key | Env | Default |
+|---|---|---|
+| `environment` | `MIB_ENVIRONMENT` | `test` |
+| `host` | `MIB_GATEWAY_URL` | from `environment` |
+| `merchant_id` | `MIB_MERCHANT_ID` | required |
+| `api_password` | `MIB_API_PASSWORD` | required |
+| `api_version` | `MIB_API_VERSION` | `100` |
+| `timeout` | `MIB_TIMEOUT` | `30` |
+| `currency` | `MIB_CURRENCY` | `MVR` |
+| `currencies` | `MIB_CURRENCIES` (comma list) | `MVR` |
+| `order_prefix` | `MIB_ORDER_PREFIX` | required, no default (decided) |
+| `checkout_js_url` | `MIB_CHECKOUT_JS_URL` | from `host` |
+| `webhook.enabled` | `MIB_WEBHOOK_ENABLED` | `true` |
+| `webhook.secret` | `MIB_WEBHOOK_SECRET`, with `MIB_WEBHOOK_SIGNATURE` as a deprecated fallback | required when the webhook is enabled |
+| `webhook.path` | `MIB_WEBHOOK_PATH` | `mib/webhook` |
+| `webhook.queue` / `webhook.connection` | `MIB_WEBHOOK_QUEUE` / `MIB_WEBHOOK_CONNECTION` | app default. Env names are provisional **(open)**. |
+| `notification_store` | `MIB_NOTIFICATION_STORE` | `database` |
+| `approval.accept_approved_auto` | `MIB_ACCEPT_APPROVED_AUTO` | `false` |
+| `double_capture.auto_reverse` | `MIB_AUTO_REVERSE_DOUBLE_CAPTURE` | `false` |
+| `attempts.expiry_grace_seconds` | `MIB_ATTEMPT_GRACE_SECONDS` | `300` (decided) |
+| `checkout.timeout_seconds` | `MIB_CHECKOUT_TIMEOUT` (600–1800, sent as `interaction.timeout`) | `1800` (decided) |
+| `allow_insecure_urls` | `MIB_ALLOW_INSECURE_URLS` | `false` |
+| `logging.channel` | `MIB_LOG_CHANNEL` | app default |
+
 
 ---
 
@@ -522,7 +742,7 @@ A payment with a live checkout session is frozen until MIB gives a final status,
 ## 8. What the host must do (documented as a checklist in the README)
 
 1. **Never reuse an `order.id`** once a session has been created for it, even after a cancel. Each checkout attempt gets a fresh ID, stored in a UNIQUE `attempts.gateway_order_id` column (§6.5). ISIMS today sends `InvoicePayment.transaction_id`; that moves to the attempts table. Send the payable's reference (ISIMS `receipt_no`) as `order.reference` on every attempt.
-2. **Freeze the payable** (amount, currency and linked invoices) while a session is live. `expectedAmount()` returns the frozen amount, never a recomputed total.
+2. **Freeze the payable** (amount, currency and its invoice set) while a session is live. While frozen, no invoice may be added, removed or moved to another payable (§6.7 A). `expectedAmount()` returns the frozen amount, never a recomputed total.
 3. **Lock around every state change** to the payable: pay, cancel, re-link and invoice moves, using `lockForUpdate` inside a transaction. `Payable::lock()` is where the package hooks in.
 4. **Persist the session data** (`sessionId`, `successIndicator`, `sessionVersion`, the order ID) in dedicated columns before redirecting.
 5. **Set `notificationUrl`** on every checkout, and configure the same secret in the MIB merchant portal.
