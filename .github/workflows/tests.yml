@@ -42,6 +42,9 @@ jobs:
       - name: Install dependencies
         run: composer update --prefer-dist --no-progress
 
+      - name: Code style (Pint)
+        run: vendor/bin/pint --test
+
       - name: Static analysis (PHPStan max + Larastan)
         run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
 
