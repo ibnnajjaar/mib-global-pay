@@ -41,6 +41,12 @@ Version 2.0.0 is in development. See [DESIGN-v2.md](./DESIGN-v2.md). Version 1.2
 
 - Testing support (`IbnNajjaar\MIBGlobalPay\Laravel\Testing`): `MibGlobalPay::fake()` returning `MibGlobalPayFake` (gateway-like defaults, `strict()`, `checkoutSession()`, sequenced `order()` stubs, `respondWith()`, and assertions), `OrderFactory`, `NotificationFactory`, and the `InteractsWithMibGlobalPay` trait with `postMibNotification()`.
 
+### Fixed (stage 7.1, from the ISIMS adoption)
+- `AttemptGuard` now verifies every attempt that may still be paid, including unexpired ones. An attempt the bank has already captured refuses with `MoneyCaptured`, and `MibGlobalPay::attemptGuard()` runs the capture pipeline for it (`Source::AttemptGuard`). A pending one refuses with `VerificationPending`. Only a live attempt the bank reports as unpaid is offered as `reusableAttempt`.
+- `AttemptState` now allows `Created → Superseded`, so every attempt the guard returns in `attemptsToSupersede` can legally be superseded. It also allows `Live → Failed` and `Expired → Failed`, for an attempt the bank confirmed as finally unpaid.
+- Explicit short index names, within MySQL's 64-character limit, in the package migration and in the host-table contract (DESIGN-v2.md §6.7 A).
+- The webhook URL is found even when `Route::mibGlobalPayWebhook()` is registered in a name-prefixed or domain host group: the macro remembers the `Route` instance.
+
 ### Included from the unreleased 1.2 work
 #### Added
 - Lifecycle operations on `MIBGlobalPayConnector`: `refund()`, `void()`, `capture()`, `updateAuthorization()` and `getTransactionDetails()`, backed by `RefundRequest`, `VoidRequest`, `CaptureRequest`, `UpdateAuthorizationRequest` and `RetrieveTransactionRequest`. All of them return `TransactionResponseData`.

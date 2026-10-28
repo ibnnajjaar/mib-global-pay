@@ -13,4 +13,7 @@ enum Source: string
     case ReturnUrl = 'return_url';
     case Reconcile = 'reconcile';
     case Manual = 'manual';
+
+    /** AttemptGuard found money captured on an earlier attempt while starting a new one. */
+    case AttemptGuard = 'attempt_guard';
 }

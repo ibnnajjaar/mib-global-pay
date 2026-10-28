@@ -99,6 +99,19 @@ final readonly class OutcomeProcessor
         $attempt = $resolved->attempt;
         $verification = $this->gateway->verifyCapture($attempt->gatewayOrderId(), $payable->expectedAmount());
 
+        return $this->processVerified($resolved, $verification, $source, $notification);
+    }
+
+    /**
+     * Run the decision step for a verification that was already made (e.g. by AttemptGuard).
+     * Takes Payable::lock() itself; the host's lock must therefore be re-entrant when this is
+     * called from inside it (DB::transaction + lockForUpdate is).
+     */
+    public function processVerified(ResolvedAttempt $resolved, VerificationResult $verification, Source $source, ?TransactionNotification $notification = null): OutcomeResult
+    {
+        $payable = $resolved->payable;
+        $attempt = $resolved->attempt;
+
         return $payable->lock(fn (): OutcomeResult => $this->decide($payable, $attempt, $verification, $source, $notification));
     }
 

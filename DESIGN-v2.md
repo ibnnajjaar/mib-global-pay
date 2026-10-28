@@ -446,6 +446,7 @@ The provider binds `MibGateway` as a singleton and the `MibGlobalPay` facade. It
   });
   ```
   **Decided:** the macro `Route::mibGlobalPayWebhook($uri)` returns the `Illuminate\Routing\Route`, so hosts can chain `->name()` or `->middleware()`.
+  **Stage 7.1:** the macro also remembers the `Route` instance. `webhookUrl()`, `newCheckoutRequest()` and `postMibNotification()` therefore find it even when a host group prefixes its name (for example `->name('student.')`, giving `student.mib-global-pay.webhook`) or sets a domain. Lookup by name is only a fallback.
 - `VerifyNotificationSecret` middleware returns 401 if the secret check fails, and 400 for a malformed notification.
 - `WebhookController`:
   1. claims the notification ID; a duplicate gets a 200 response and nothing else happens;
@@ -675,10 +676,17 @@ This section is self-contained, so it can be handed to the ISIMS side as it stan
 
 Indexes and constraints on `invoice_payment_attempts`:
 
-- `UNIQUE (gateway_order_id)`
-- `UNIQUE (invoice_payment_id, attempt_number)`
-- `INDEX (state, expires_at)`, for `mib:reconcile`
-- `INDEX (session_id)`
+Use these **explicit index names**. Laravel's generated name for the composite unique would be `invoice_payment_attempts_invoice_payment_id_attempt_number_unique` (65 characters), which is over MySQL's 64-character limit (stage 7.1 fix):
+
+| Index | Name | Laravel |
+|---|---|---|
+| `UNIQUE (gateway_order_id)` | `ipa_gateway_order_id_unique` | `$table->unique('gateway_order_id', 'ipa_gateway_order_id_unique')` |
+| `UNIQUE (invoice_payment_id, attempt_number)` | `ipa_payment_attempt_number_unique` | `$table->unique(['invoice_payment_id', 'attempt_number'], 'ipa_payment_attempt_number_unique')` |
+| `INDEX (state, expires_at)`, for `mib:reconcile` | `ipa_state_expires_at_index` | `$table->index(['state', 'expires_at'], 'ipa_state_expires_at_index')` |
+| `INDEX (session_id)` | `ipa_session_id_index` | `$table->index('session_id', 'ipa_session_id_index')` |
+| `UNIQUE (invoice_payments.settled_attempt_id)` | `ip_settled_attempt_id_unique` | `$table->unique('settled_attempt_id', 'ip_settled_attempt_id_unique')` |
+
+The package's own migration names its indexes explicitly too (`mib_gp_notifications_*`).
 
 **New columns on `invoice_payments` (the payable)**
 
@@ -794,23 +802,33 @@ Binding, in an ISIMS service provider: `$this->app->bind(PayableResolver::class,
   1. Inside `lock()`, insert the attempt row with state `created`.
   2. Call `initiateCheckout`.
   3. On success, store `session_id`, `success_indicator` and `session_version`, and set state to `live`. On failure, set state to `failed`; that order ID is burned.
-- **`(new AttemptGuard(Gateway $gateway, ?Closure $clock = null))->canStartNewAttempt(Payable $p): GuardResult`** (built in stage 4). Call it inside `Payable::lock()`, and create the new attempt in the same lock. It relies on `verifyCapture()` only (decided), never on order-status summaries. It allows a new attempt only when all of these hold:
+- **`(new AttemptGuard(Gateway $gateway, ?Closure $clock = null, ?Closure $onMoneyCaptured = null))->canStartNewAttempt(Payable $p): GuardResult`**. In Laravel, use `MibGlobalPay::attemptGuard()`, which wires `$onMoneyCaptured` to the outcome pipeline.
+  - Call it inside `Payable::lock()`, and create the new attempt in the same lock.
+  - It relies on `verifyCapture()` only (decided), never on order-status summaries.
+  - **Stage 7.1:** every attempt that may still be paid is verified with the bank, whether or not it has expired.
+
+  It allows a new attempt only when all of these hold:
   1. `payableState()` is `Open` or `Frozen`; otherwise `GuardRefusal::PayableNotPayable`.
   2. `settledBy()` is null (`AlreadySettled`), and no attempt is in state `Captured` (`AttemptCaptured`).
-  3. Every earlier attempt that may still be paid (`Created`, `Live`, `Expired`) is past `expiresAt()` **and** verifies as `NotCaptured`, `Reversed` or `NotFound`.
-     - **Decided:** `NotFound` counts as safe to supersede. A Hosted Checkout order only appears at the gateway once the payer submits payment, so an unpaid, expired session reads as not found. *Caveat:* this depends on the unverified NotFound mapping (MIB question 17).
-     - An attempt that has not expired refuses with `AttemptStillLive`, and a `Live` one is returned as `reusableAttempt`.
+  3. Every earlier attempt that may still be paid (`Created`, `Live`, `Expired`) is verified. The results are applied in this order of precedence:
+     1. **Money captured** on any attempt (`Captured`, `AmountMismatch` or `CurrencyMismatch`) refuses with `MoneyCaptured`. `$onMoneyCaptured` runs for each such attempt; in Laravel it runs the outcome pipeline with `Source::AttemptGuard`, so `PaymentCaptured` or `CaptureMismatch` is dispatched as usual.
+     2. **`Pending`** on any attempt refuses with `VerificationPending`.
+     3. An attempt that is **not expired** and verifies as `NotCaptured` or `NotFound` refuses with `AttemptStillLive`. Only a `Live` attempt is returned as `reusableAttempt`, never a `Created` one, whose session may not exist.
+     4. Otherwise the new attempt is allowed. `attemptsToSupersede` lists the attempts that are expired and `NotCaptured` or `NotFound`, plus any `Reversed` attempt, expired or not.
+     - **Decided:** `NotFound` counts as unpaid. A Hosted Checkout order only appears at the gateway once the payer submits payment, so an unpaid, expired session reads as not found. *Caveat:* this depends on the unverified NotFound mapping (MIB question 17).
      - `Failed` and `Superseded` attempts need no check.
-  4. A verification of `Captured`, `AmountMismatch` or `CurrencyMismatch` refuses with `MoneyCaptured`; run the capture pipeline. `Pending` refuses with `VerificationPending`.
-  - When it allows, the host marks `GuardResult::$attemptsToSupersede` as `Superseded` and creates attempt `nextAttemptNumber` in state `Created`.
+     - **Cost:** one Retrieve Order per attempt that may still be paid, usually zero or one. If the gateway can't be reached, the guard throws, so no new attempt starts while an older one might be paid.
+  - When it allows, the host marks every attempt in `GuardResult::$attemptsToSupersede` as `Superseded`. All of them can legally make that transition, including `Created`. The host then creates attempt `nextAttemptNumber` in state `Created`.
   - `GuardResult` fields: `allowed`, `reason: ?GuardRefusal`, `nextAttemptNumber`, `attemptsToSupersede`, `reusableAttempt`, `blockingAttempt`, and `verifications` (by gateway order ID, for audit).
-- **Attempt lifecycle** (`AttemptState::canTransitionTo()`):
-  - `Created → Live | Failed`
-  - `Live → Captured | Expired | Superseded`
-  - `Expired → Captured | Superseded`
+  - The pipeline takes `Payable::lock()` again inside the host's lock, so **`lock()` must be re-entrant**. Nested `DB::transaction` with `lockForUpdate` is re-entrant.
+- **Attempt lifecycle** (`AttemptState::canTransitionTo()`; stage 7.1 added `Created → Superseded`, `Live → Failed` and `Expired → Failed`):
+  - `Created → Live | Failed | Superseded`
+  - `Live → Captured | Expired | Failed | Superseded`
+  - `Expired → Captured | Failed | Superseded`
   - `Superseded → Captured` (a late capture is still recorded; if the payable is already paid it is a double capture)
   - `Captured` and `Failed` are final.
-- **Reuse rule:** while the newest attempt is `Live` and not expired, re-display its session instead of creating a new attempt. `retrieveSession()` can confirm the session's `order.id` and `order.amount`.
+  - **`Failed`** means finished without payment: Initiate Checkout failed, or the bank confirmed the attempt as finally unpaid, for example on `PaymentFailed`. **`Superseded`** means retired in favour of a newer attempt.
+- **Reuse rule:** when the guard returns `AttemptStillLive` with a `reusableAttempt`, re-display that attempt's session instead of creating a new one. The bank has just confirmed it is unpaid.
 
 #### D. Events (`IbnNajjaar\MIBGlobalPay\Laravel\Events\*`, all `final readonly`)
 

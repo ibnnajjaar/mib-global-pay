@@ -160,6 +160,8 @@ All keys: `config/mib-global-pay.php` (`php artisan vendor:publish --tag=mib-glo
        Route::mibGlobalPayWebhook('payment-gateways/mib/webhook');
    });
    ```
+   The route can sit in a name-prefixed or domain group; the package remembers the route itself, so the webhook URL is
+   still found (for `newCheckoutRequest()` and the tests).
    It answers 200 (accepted or duplicate), 401 (bad secret), 400 (malformed), 503 (not configured).
    Processing runs on the queue (`MIB_WEBHOOK_CONNECTION`, `MIB_WEBHOOK_QUEUE`).
 4. **Listen to the events** (`IbnNajjaar\MIBGlobalPay\Laravel\Events`). They are dispatched inside
@@ -176,7 +178,10 @@ All keys: `config/mib-global-pay.php` (`php artisan vendor:publish --tag=mib-glo
    ```blade
    <x-mib-global-pay::checkout :session="$session->sessionId" />
    ```
-   Before a retry, `MibGlobalPay::attemptGuard()->canStartNewAttempt($payable)` (inside the lock).
+   Before a retry, call `MibGlobalPay::attemptGuard()->canStartNewAttempt($payable)` inside the lock. It asks the bank about every
+   open attempt. If one is already paid, it refuses with `MoneyCaptured` and dispatches `PaymentCaptured` itself. If a live
+   attempt is still unpaid, it returns it as `reusableAttempt`. Otherwise it allows a new attempt and lists the old ones to mark
+   `Superseded`. Your `Payable::lock()` must be re-entrant (nested `DB::transaction` is).
 6. **Return URL:** `app(PaymentOutcome::class)->resolveFromReturn($orderId, $request->query())`.
 7. **Schedule** `mib:reconcile` (every few minutes) and `mib:prune-notifications` (daily).
 

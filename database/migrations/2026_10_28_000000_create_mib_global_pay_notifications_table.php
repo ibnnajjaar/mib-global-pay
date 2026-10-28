@@ -17,13 +17,16 @@ return new class () extends Migration {
     {
         Schema::create('mib_global_pay_notifications', function (Blueprint $table): void {
             $table->id();
-            $table->string('notification_id', 191)->nullable()->unique();
-            $table->string('order_id', 40)->nullable()->index();
+            $table->string('notification_id', 191)->nullable();
+            $table->string('order_id', 40)->nullable();
             $table->string('transaction_id', 40)->nullable();
             $table->string('outcome', 40)->nullable();
             $table->string('status', 20)->nullable();
             $table->timestamps();
 
+            // Explicit short names (MySQL allows 64 characters).
+            $table->unique('notification_id', 'mib_gp_notifications_notification_unique');
+            $table->index('order_id', 'mib_gp_notifications_order_index');
             $table->unique(['order_id', 'transaction_id', 'outcome'], 'mib_gp_notifications_business_unique');
         });
     }

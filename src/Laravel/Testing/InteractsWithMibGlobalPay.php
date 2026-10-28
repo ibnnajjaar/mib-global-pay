@@ -16,8 +16,9 @@ use IbnNajjaar\MIBGlobalPay\Laravel\Support\Settings;
 trait InteractsWithMibGlobalPay
 {
     /**
-     * POST a webhook notification to the package's route (mib-global-pay.webhook), signed with the
-     * configured MIB_WEBHOOK_SECRET unless $secret is given.
+     * POST a webhook notification to the package's webhook route (wherever and however it is
+     * registered, including name-prefixed host groups), signed with the configured
+     * MIB_WEBHOOK_SECRET unless $secret is given.
      *
      * @return TestResponse<\Symfony\Component\HttpFoundation\Response>
      */
@@ -31,6 +32,9 @@ trait InteractsWithMibGlobalPay
 
         $server['HTTP_X_NOTIFICATION_SECRET'] = $secret ?? $this->app->make(Settings::class)->webhookSecret();
 
-        return $this->call('POST', $uri ?? route(MibGlobalPay::WEBHOOK_ROUTE_NAME), [], [], [], $server, $notification->body);
+        $uri ??= $this->app->make(MibGlobalPay::class)->webhookUrl()
+            ?? throw new \LogicException('The MIB webhook route is not registered; pass $uri or register it with Route::mibGlobalPayWebhook().');
+
+        return $this->call('POST', $uri, [], [], [], $server, $notification->body);
     }
 }

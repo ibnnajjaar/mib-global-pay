@@ -6,14 +6,22 @@ namespace IbnNajjaar\MIBGlobalPay\Laravel;
 
 use Illuminate\Routing\Router;
 use IbnNajjaar\MIBGlobalPay\Core\Money\Money;
+use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Routing\UrlGenerator;
+use IbnNajjaar\MIBGlobalPay\Core\Attempts\Attempt;
+use IbnNajjaar\MIBGlobalPay\Core\Attempts\Payable;
+use IbnNajjaar\MIBGlobalPay\Laravel\Events\Source;
 use IbnNajjaar\MIBGlobalPay\Core\Contracts\Gateway;
 use IbnNajjaar\MIBGlobalPay\Laravel\Support\Settings;
 use IbnNajjaar\MIBGlobalPay\Core\Attempts\AttemptGuard;
 use IbnNajjaar\MIBGlobalPay\Core\Reversal\ReversalHelper;
+use IbnNajjaar\MIBGlobalPay\Laravel\Support\WebhookRoute;
+use IbnNajjaar\MIBGlobalPay\Core\Attempts\ResolvedAttempt;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\CheckoutRequest;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
 use IbnNajjaar\MIBGlobalPay\Core\Contracts\OrderIdGenerator;
+use IbnNajjaar\MIBGlobalPay\Laravel\Outcome\OutcomeProcessor;
+use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationResult;
 
 /**
  * The object behind the MibGlobalPay facade: the configured Gateway plus Laravel helpers.
@@ -31,6 +39,8 @@ final readonly class MibGlobalPay
         private OrderIdGenerator $orderIds,
         private Router $router,
         private UrlGenerator $urls,
+        private WebhookRoute $webhookRoute,
+        private Container $container,
     ) {
     }
 
@@ -73,9 +83,18 @@ final readonly class MibGlobalPay
         return $url === null ? $request : $request->withNotificationUrl($url);
     }
 
-    /** The absolute URL of the webhook route, if it is registered. */
+    /**
+     * The absolute URL of the webhook route, if it is registered. Works whatever name prefix or
+     * domain a host group gives the route registered with Route::mibGlobalPayWebhook().
+     */
     public function webhookUrl(): ?string
     {
+        $route = $this->webhookRoute->route();
+
+        if ($route !== null) {
+            return $this->urls->toRoute($route, [], true);
+        }
+
         return $this->router->has(self::WEBHOOK_ROUTE_NAME) ? $this->urls->route(self::WEBHOOK_ROUTE_NAME) : null;
     }
 
@@ -86,9 +105,20 @@ final readonly class MibGlobalPay
             ->modify(sprintf('+%d seconds', $this->settings->checkoutTimeoutSeconds() + $this->settings->expiryGraceSeconds()));
     }
 
+    /**
+     * AttemptGuard wired to the outcome pipeline: when it finds money captured on an earlier
+     * attempt, the pipeline runs for it (Source::AttemptGuard), so PaymentCaptured or
+     * CaptureMismatch is dispatched as usual.
+     */
     public function attemptGuard(): AttemptGuard
     {
-        return new AttemptGuard($this->gateway);
+        return new AttemptGuard(
+            $this->gateway,
+            onMoneyCaptured: function (Payable $payable, Attempt $attempt, VerificationResult $verification): void {
+                $this->container->make(OutcomeProcessor::class)
+                    ->processVerified(new ResolvedAttempt($payable, $attempt), $verification, Source::AttemptGuard);
+            },
+        );
     }
 
     public function reversal(): ReversalHelper

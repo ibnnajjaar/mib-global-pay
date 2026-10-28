@@ -16,6 +16,7 @@ use IbnNajjaar\MIBGlobalPay\Core\Contracts\Gateway;
 use IbnNajjaar\MIBGlobalPay\Laravel\Support\Settings;
 use IbnNajjaar\MIBGlobalPay\Core\Config\GatewayConfig;
 use IbnNajjaar\MIBGlobalPay\Core\Support\GatewayOrderId;
+use IbnNajjaar\MIBGlobalPay\Laravel\Support\WebhookRoute;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use IbnNajjaar\MIBGlobalPay\Core\Webhook\NotificationStore;
 use IbnNajjaar\MIBGlobalPay\Laravel\Events\CaptureMismatch;
@@ -68,6 +69,7 @@ class MibGlobalPayServiceProvider extends ServiceProvider
         });
 
         $this->app->singleton(MibGlobalPay::class);
+        $this->app->singleton(WebhookRoute::class);
 
         $this->app->singleton(NotificationStore::class, function (Application $app): NotificationStore {
             return match ($store = $app->make(Settings::class)->notificationStore()) {
@@ -130,9 +132,14 @@ class MibGlobalPayServiceProvider extends ServiceProvider
     /** @internal the body of the Route::mibGlobalPayWebhook() macro */
     public static function webhookRoute(Router $router, string $uri): Route
     {
-        return $router->post($uri, WebhookController::class)
+        $route = $router->post($uri, WebhookController::class)
             ->name(MibGlobalPay::WEBHOOK_ROUTE_NAME)
             ->middleware(VerifyNotificationSecret::class)
             ->withoutMiddleware([ValidateCsrfToken::class, VerifyCsrfToken::class]);
+
+        // Remember the Route itself: a host group may prefix its name or set its domain.
+        \Illuminate\Container\Container::getInstance()->make(WebhookRoute::class)->remember($route);
+
+        return $route;
     }
 }
