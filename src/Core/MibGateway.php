@@ -36,8 +36,10 @@ use IbnNajjaar\MIBGlobalPay\Core\Responses\SessionDetails;
 use IbnNajjaar\MIBGlobalPay\Core\Responses\CheckoutSession;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\GatewayException;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\MalformedPayload;
+use IbnNajjaar\MIBGlobalPay\Core\Verification\CaptureVerifier;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\TransportException;
 use IbnNajjaar\MIBGlobalPay\Core\Responses\TransactionResponse;
+use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationResult;
 
 /**
  * The v2 gateway client.
@@ -156,6 +158,23 @@ final class MibGateway implements Gateway
 
             return $operation->parse(Payload::fromArray($decoded), $this->config);
         }
+    }
+
+    public function verifyCapture(string $orderId, Money $expected): VerificationResult
+    {
+        $verifier = new CaptureVerifier($this->config->approvalPolicy);
+
+        try {
+            $order = $this->retrieveOrder($orderId);
+        } catch (GatewayException $e) {
+            if (CaptureVerifier::isOrderNotFound($e)) {
+                return $verifier->notFound($orderId, $expected);
+            }
+
+            throw $e;
+        }
+
+        return $verifier->verify($order, $expected);
     }
 
     public function checkout(): CheckoutClient

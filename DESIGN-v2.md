@@ -249,6 +249,25 @@ Rules:
 - It is idempotent and side-effect free, so it can be called any number of times from the return URL, the webhook, the reconciliation job and admin.
 - It is also available as a pure function on an already-fetched order, `CaptureVerifier::verify(OrderResponse, Money)`, for tests and the fake.
 
+**Implemented in stage 4** (`Core\Verification\CaptureVerifier`, `MibGateway::verifyCapture()`, also on the `Gateway` contract). The verifier uses the configured `ApprovalPolicy`, and its rules are evaluated in order:
+
+1. If there is no approved `PAYMENT`/`CAPTURE`, the result is `Pending` when the latest non-`AUTHENTICATION` transaction has result PENDING or UNKNOWN, or gateway code PENDING, SUBMITTED, DEFERRED_TRANSACTION_RECEIVED, UNKNOWN or TIMED_OUT. Otherwise it is `NotCaptured`.
+2. `Reversed` when every approved payment or capture has an approved `VOID_PAYMENT`/`VOID_CAPTURE` targeting it, or when `totalRefunded ≥ totalCaptured > 0`.
+3. `CurrencyMismatch` when the order currency differs from the expected currency.
+4. `AmountMismatch` when `totalCapturedAmount` is missing (decided, ISIMS feedback).
+5. Otherwise `Captured` when `totalCaptured` equals the expected amount, and `AmountMismatch` when it does not. A partial refund does not change the result; `refunded` is exposed on the result.
+
+`NotFound` is returned for HTTP 404, or HTTP 400 whose explanation says the order was not found. This mapping is **unverified against the MIB sandbox**. Any other `GatewayException` is rethrown.
+
+Also in stage 4:
+
+- `HostedCheckoutReturn::fromQuery()` and `matchesSuccessIndicator()` (timing-safe, below).
+- `Support\GatewayOrderId`, the default `Contracts\OrderIdGenerator` (sanitising per §6.7 C).
+- `Support\TransactionId::generate()`.
+- `Reversal\ReversalHelper::reverse($orderId, $voidTxnId, $refundTxnId)`. It voids the latest approved payment or capture. When the void is declined or rejected with 4xx, it refunds `refundable()` instead. A 5xx response is rethrown.
+
+`AttemptGuard` waits on the enum-helper definitions and the namespace of the host contracts.
+
 ### 4.3 Return URL
 
 - `HostedCheckoutReturn::fromQuery(array $query)`

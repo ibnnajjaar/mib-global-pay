@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace IbnNajjaar\MIBGlobalPay\Core\Contracts;
 
+use IbnNajjaar\MIBGlobalPay\Core\Money\Money;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\OrderClient;
 use IbnNajjaar\MIBGlobalPay\Core\Config\GatewayConfig;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\GatewayClient;
@@ -13,6 +14,7 @@ use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\GatewayException;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\MalformedPayload;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\TransportException;
+use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationResult;
 
 /**
  * The gateway client contract. MibGateway implements it; the testing fake (stage 7) will too,
@@ -37,6 +39,17 @@ interface Gateway
      * @throws MalformedPayload  the response could not be parsed
      */
     public function send(Operation $operation): object;
+
+    /**
+     * Re-read the order from the gateway and check it is captured for exactly $expected,
+     * using the configured ApprovalPolicy. An unknown order gives NotFound, not an exception.
+     *
+     * @throws InvalidRequest
+     * @throws GatewayException  for errors other than "order not found"
+     * @throws TransportException
+     * @throws MalformedPayload
+     */
+    public function verifyCapture(string $orderId, Money $expected): VerificationResult;
 
     public function checkout(): CheckoutClient;
 
