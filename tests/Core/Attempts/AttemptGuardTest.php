@@ -69,8 +69,8 @@ it('refuses a settled payable or one with a captured attempt', function () {
         ->and($guard->canStartNewAttempt($captured)->blockingAttempt?->attemptNumber())->toBe(1);
 });
 
-it('refuses while an earlier attempt has not expired and offers a live one for reuse', function (AttemptState $state, bool $reusable) {
-    [$guard, $h] = guard();
+it('verifies an unexpired attempt and offers a live, unpaid one for reuse', function (AttemptState $state, int $status, array $body, bool $reusable) {
+    [$guard, $h] = guard([GatewayHarness::json($status, $body)]);
     $live = attempt(1, $state, '2026-10-28 12:30:00');
 
     $result = $guard->canStartNewAttempt(new InMemoryPayable(amount(), attempts: [$live]));
@@ -79,11 +79,72 @@ it('refuses while an earlier attempt has not expired and offers a live one for r
         ->and($result->reason)->toBe(GuardRefusal::AttemptStillLive)
         ->and($result->reusableAttempt)->toBe($reusable ? $live : null)
         ->and($result->blockingAttempt)->toBe($live)
-        ->and($h->history)->toBe([]);
+        ->and($h->history)->toHaveCount(1);
 })->with([
-    'live' => [AttemptState::Live, true],
-    'created (response may have been lost)' => [AttemptState::Created, false],
+    'live, not paid yet (unknown order)' => [AttemptState::Live, 404, [], true],
+    'live, declined' => [AttemptState::Live, 200, orderBody('DECLINED', 'FAILURE', 0), true],
+    'created (response may have been lost)' => [AttemptState::Created, 404, [], false],
 ]);
+
+it('refuses with MoneyCaptured when the bank already captured a live attempt, and reports it', function () {
+    $harness = new GatewayHarness([GatewayHarness::json(200, orderBody())]);
+    $reported = [];
+    $guard = new AttemptGuard($harness->gateway, fn () => new DateTimeImmutable(GUARD_NOW), function ($payable, $attempt, $verification) use (&$reported): void {
+        $reported[] = [$attempt->gatewayOrderId(), $verification->status];
+    });
+    $live = attempt(1, AttemptState::Live, '2026-10-28 12:30:00');
+
+    $result = $guard->canStartNewAttempt(new InMemoryPayable(amount(), attempts: [$live]));
+
+    expect($result->reason)->toBe(GuardRefusal::MoneyCaptured)
+        ->and($result->reusableAttempt)->toBeNull()
+        ->and($result->blockingAttempt)->toBe($live)
+        ->and($reported)->toBe([['ISIMS-R-IUM-FN-2026-123-1', VerificationStatus::Captured]]);
+});
+
+it('refuses with VerificationPending when a live attempt is pending', function () {
+    [$guard] = guard([GatewayHarness::json(200, orderBody('PENDING', 'PENDING', 0))]);
+
+    $result = $guard->canStartNewAttempt(new InMemoryPayable(amount(), attempts: [attempt(1, AttemptState::Live, '2026-10-28 12:30:00')]));
+
+    expect($result->reason)->toBe(GuardRefusal::VerificationPending)->and($result->reusableAttempt)->toBeNull();
+});
+
+it('gives money captured on any attempt precedence over a live one', function () {
+    $body = orderBody();
+    $body['id'] = 'ISIMS-R-IUM-FN-2026-123-1';
+    [$guard] = guard([GatewayHarness::json(404, []), GatewayHarness::json(200, $body)]);
+    $payable = new InMemoryPayable(amount(), attempts: [
+        attempt(2, AttemptState::Live, '2026-10-28 12:30:00'),
+        attempt(1, AttemptState::Expired),
+    ]);
+
+    $result = $guard->canStartNewAttempt($payable);
+
+    expect($result->reason)->toBe(GuardRefusal::MoneyCaptured)
+        ->and($result->blockingAttempt?->attemptNumber())->toBe(1);
+});
+
+it('supersedes a reversed attempt even before it expires', function () {
+    [$guard] = guard([GatewayHarness::json(200, orderBody() + ['totalRefundedAmount' => 1250.5])]);
+    $reversed = attempt(1, AttemptState::Live, '2026-10-28 12:30:00');
+
+    $result = $guard->canStartNewAttempt(new InMemoryPayable(amount(), attempts: [$reversed]));
+
+    expect($result->allowed)->toBeTrue()->and($result->attemptsToSupersede)->toBe([$reversed]);
+});
+
+it('only returns attempts whose state may legally move to Superseded', function (AttemptState $state) {
+    [$guard] = guard([GatewayHarness::json(404, [])]);
+    $old = attempt(1, $state);
+
+    $result = $guard->canStartNewAttempt(new InMemoryPayable(amount(), attempts: [$old]));
+
+    expect($result->attemptsToSupersede)->toBe([$old]);
+    foreach ($result->attemptsToSupersede as $attempt) {
+        expect($attempt->state()->canTransitionTo(AttemptState::Superseded))->toBeTrue();
+    }
+})->with([AttemptState::Created, AttemptState::Live, AttemptState::Expired]);
 
 it('allows a new attempt once the earlier one expired and verifies as not captured', function (array $body, int $status, VerificationStatus $verified) {
     [$guard, $h] = guard([GatewayHarness::json($status, $body)]);

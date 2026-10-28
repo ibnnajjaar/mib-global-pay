@@ -12,9 +12,9 @@ use IbnNajjaar\MIBGlobalPay\Core\Enums\TransactionType;
 
 it('allows only the documented attempt transitions', function () {
     $allowed = [
-        'created' => ['live', 'failed'],
-        'live' => ['captured', 'expired', 'superseded'],
-        'expired' => ['captured', 'superseded'],
+        'created' => ['live', 'failed', 'superseded'],
+        'live' => ['captured', 'expired', 'failed', 'superseded'],
+        'expired' => ['captured', 'failed', 'superseded'],
         'superseded' => ['captured'],
         'captured' => [],
         'failed' => [],

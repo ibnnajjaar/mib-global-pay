@@ -24,6 +24,6 @@ enum GuardRefusal: string
     /** The gateway reports an earlier attempt as pending; ask again later. */
     case VerificationPending = 'verification_pending';
 
-    /** An earlier attempt has not expired yet; re-display its session instead (see GuardResult::$reusableAttempt). */
+    /** An earlier attempt has not expired and the bank reports it unpaid; re-display its session instead (GuardResult::$reusableAttempt, Live attempts only). */
     case AttemptStillLive = 'attempt_still_live';
 }
