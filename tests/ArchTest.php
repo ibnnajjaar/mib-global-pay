@@ -59,3 +59,7 @@ arch('every v2 operation implements the Operation contract')
     ->expect('IbnNajjaar\MIBGlobalPay\Core\Operations')
     ->classes()
     ->toImplement('IbnNajjaar\MIBGlobalPay\Core\Contracts\Operation');
+
+arch('host contracts live in Core and have no Laravel dependency')
+    ->expect('IbnNajjaar\MIBGlobalPay\Core\Attempts')
+    ->not->toUse(['Illuminate', 'IbnNajjaar\MIBGlobalPay\Laravel']);

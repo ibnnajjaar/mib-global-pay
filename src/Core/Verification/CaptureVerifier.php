@@ -44,8 +44,7 @@ final readonly class CaptureVerifier
     {
         $captures = array_values(array_filter(
             $order->transactions,
-            fn (TransactionResponse $t): bool => ($t->type === TransactionType::Payment || $t->type === TransactionType::Capture)
-                && $t->isApproved($this->policy),
+            fn (TransactionResponse $t): bool => $t->type->movesMoneyIn() && $t->isApproved($this->policy),
         ));
 
         if ($captures === []) {
@@ -127,8 +126,8 @@ final readonly class CaptureVerifier
     private function voidedTransactionIds(OrderResponse $order): array
     {
         $ids = [];
-        foreach ($order->transactionsOfType(TransactionType::VoidPayment, TransactionType::VoidCapture) as $void) {
-            if ($void->isApproved($this->policy) && $void->targetTransactionId !== null) {
+        foreach ($order->transactions as $void) {
+            if ($void->type->reversesMoneyIn() && $void->isApproved($this->policy) && $void->targetTransactionId !== null) {
                 $ids[] = $void->targetTransactionId;
             }
         }

@@ -29,6 +29,24 @@ enum TransactionType: string implements GatewayEnum
     case VoidPayment = 'VOID_PAYMENT';
     case VoidRefund = 'VOID_REFUND';
 
+    /** PAYMENT or CAPTURE: moves money from the payer. AUTHORIZATION only reserves funds. */
+    public function movesMoneyIn(): bool
+    {
+        return $this === self::Payment || $this === self::Capture;
+    }
+
+    /** Any of VOID_AUTHORIZATION, VOID_CAPTURE, VOID_PAYMENT, VOID_REFUND. */
+    public function isVoid(): bool
+    {
+        return in_array($this, [self::VoidAuthorization, self::VoidCapture, self::VoidPayment, self::VoidRefund], true);
+    }
+
+    /** VOID_PAYMENT or VOID_CAPTURE: undoes money moved in. */
+    public function reversesMoneyIn(): bool
+    {
+        return $this === self::VoidPayment || $this === self::VoidCapture;
+    }
+
     /** The gateway sent a value this version of the package does not know. */
     case Unrecognized = '';
 }

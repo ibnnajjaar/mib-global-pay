@@ -47,7 +47,7 @@ src/
   Laravel/                      # optional, only loaded when Laravel is present
     MibGlobalPayServiceProvider.php
     Facades/MibGlobalPay.php
-    Contracts/PayableResolver.php, NotificationStore.php
+    Contracts/NotificationStore.php   # host contracts (Payable, Attempt, PayableResolver) live in Core/Attempts
     Http/Controllers/WebhookController.php
     Http/Middleware/VerifyNotificationSecret.php
     Jobs/ProcessNotification.php
@@ -266,7 +266,7 @@ Also in stage 4:
 - `Support\TransactionId::generate()`.
 - `Reversal\ReversalHelper::reverse($orderId, $voidTxnId, $refundTxnId)`. It voids the latest approved payment or capture. When the void is declined or rejected with 4xx, it refunds `refundable()` instead. A 5xx response is rethrown.
 
-`AttemptGuard` waits on the enum-helper definitions and the namespace of the host contracts.
+Enum helpers (decided): `OrderStatus::isTerminalWithoutPayment()` (FAILED, CANCELLED, AUTHENTICATION_UNSUCCESSFUL; a convenience only), `TransactionType::movesMoneyIn()` (PAYMENT, CAPTURE; not AUTHORIZATION), `isVoid()` (all four VOID types) and `reversesMoneyIn()` (VOID_PAYMENT, VOID_CAPTURE). There is no broad `isFinal()` and no `isMoneyHeld()`; use the Money totals instead. `AttemptGuard` and the host contracts are in `Core\Attempts` (§6.7).
 
 ### 4.3 Return URL
 
@@ -422,7 +422,7 @@ The package **never** marks anything paid. It only fires events. The host's list
 > Where §6.5 and §6.7 differ, **§6.7 is authoritative**. It holds the exact signatures, columns, events and config handed to ISIMS.
 
 ```php
-namespace IbnNajjaar\MIBGlobalPay\Laravel\Contracts;
+namespace IbnNajjaar\MIBGlobalPay\Core\Attempts; // moved from Laravel\Contracts in stage 4 (§6.7 contract changes)
 
 **Attempt model (decided): one payable, many attempts.**
 
@@ -431,7 +431,7 @@ namespace IbnNajjaar\MIBGlobalPay\Laravel\Contracts;
 - A capture on *any* attempt settles that payable.
 
 ```php
-namespace IbnNajjaar\MIBGlobalPay\Laravel\Contracts;
+namespace IbnNajjaar\MIBGlobalPay\Core\Attempts; // moved from Laravel\Contracts in stage 4 (§6.7 contract changes)
 
 interface PayableResolver
 {
@@ -489,7 +489,7 @@ interface Attempt
   - no attempt is `Captured`;
   - every earlier attempt has reached a final state through `verifyCapture()`, **or** has passed `interaction.timeout` plus grace and been verified `NotCaptured`;
   - earlier attempts are then marked `Superseded`.
-  - The package helper `AttemptGuard::canStartNewAttempt(Payable, MibGateway)` runs these checks inside `lock()`.
+  - The package helper `Core\Attempts\AttemptGuard::canStartNewAttempt(Payable)` runs these checks inside `lock()` (§6.7 C).
 
 #### Outcomes on capture (inside `lock()`, after `verifyCapture` against `expectedAmount()`)
 
@@ -618,14 +618,10 @@ Indexes and constraints on `invoice_payment_attempts`:
 ```php
 declare(strict_types=1);
 
-namespace IbnNajjaar\MIBGlobalPay\Laravel\Contracts;
+namespace IbnNajjaar\MIBGlobalPay\Core\Attempts;
 
 use Closure;
 use IbnNajjaar\MIBGlobalPay\Core\Money\Money;
-use IbnNajjaar\MIBGlobalPay\Laravel\Enums\AttemptState;
-use IbnNajjaar\MIBGlobalPay\Laravel\Enums\PayableState;
-use IbnNajjaar\MIBGlobalPay\Laravel\Data\ResolvedAttempt;
-use IbnNajjaar\MIBGlobalPay\Laravel\Data\Settlement;
 
 interface PayableResolver
 {
@@ -674,16 +670,24 @@ interface Attempt
 ```
 
 ```php
-namespace IbnNajjaar\MIBGlobalPay\Laravel\Enums;
+namespace IbnNajjaar\MIBGlobalPay\Core\Attempts;
 
-enum PayableState: string { case Open = 'open'; case Frozen = 'frozen'; case Cancelled = 'cancelled'; case Failed = 'failed'; case Paid = 'paid'; }
-enum AttemptState: string { case Created = 'created'; case Live = 'live'; case Captured = 'captured'; case Failed = 'failed'; case Expired = 'expired'; case Superseded = 'superseded'; }
-
-namespace IbnNajjaar\MIBGlobalPay\Laravel\Data;
+enum PayableState: string { case Open = 'open'; case Frozen = 'frozen'; case Cancelled = 'cancelled'; case Failed = 'failed'; case Paid = 'paid';
+    public function isPayable(): bool; } // Open or Frozen
+enum AttemptState: string { case Created = 'created'; case Live = 'live'; case Captured = 'captured'; case Failed = 'failed'; case Expired = 'expired'; case Superseded = 'superseded';
+    public function canTransitionTo(self $next): bool; // see C
+    public function mayStillBePaid(): bool; }          // Created, Live, Expired
 
 final readonly class ResolvedAttempt { public function __construct(public Payable $payable, public Attempt $attempt) {} }
-final readonly class Settlement { public function __construct(public string $gatewayOrderId, public string $transactionId, public Money $amount, public \DateTimeImmutable $settledAt) {} }
+final readonly class Settlement { public function __construct(public string $gatewayOrderId, public string $transactionId, public Money $amount, public \DateTimeImmutable $settledAt) {}
+    public function isSameCapture(string $gatewayOrderId, ?string $transactionId): bool; }
 ```
+
+**§6.7 contract changes (stage 4, for ISIMS):**
+- `Payable`, `Attempt`, `PayableResolver`, `PayableState`, `AttemptState`, `ResolvedAttempt` and `Settlement` moved from `Laravel\Contracts`, `Laravel\Enums` and `Laravel\Data` to **`IbnNajjaar\MIBGlobalPay\Core\Attempts`**. None of them depends on Laravel. The method signatures are unchanged.
+- Added helpers: `PayableState::isPayable()`, `AttemptState::canTransitionTo()` / `mayStillBePaid()`, `Settlement::isSameCapture()`.
+- `AttemptGuard` is `Core\Attempts\AttemptGuard`. It is constructed with the `Gateway` (contract, not `MibGateway`) and called as `canStartNewAttempt(Payable)`; see C.
+- The Laravel layer (stage 6) will use these types as they are.
 
 Binding, in an ISIMS service provider: `$this->app->bind(PayableResolver::class, IsimsPayableResolver::class);`. While this is unbound, the webhook route is disabled.
 
@@ -702,13 +706,21 @@ Binding, in an ISIMS service provider: `$this->app->bind(PayableResolver::class,
   1. Inside `lock()`, insert the attempt row with state `created`.
   2. Call `initiateCheckout`.
   3. On success, store `session_id`, `success_indicator` and `session_version`, and set state to `live`. On failure, set state to `failed`; that order ID is burned.
-- **`AttemptGuard::canStartNewAttempt(Payable $p, MibGateway $g): GuardResult`** runs inside `lock()`. It allows a new attempt only when all of these hold:
-  1. `payableState()` is `Open` or `Frozen`;
-  2. `settledBy()` is null, and no attempt is in state `Captured`;
-  3. every earlier attempt is either `Failed`, or has been verified by `verifyCapture()` with a final non-captured status, or is past `expiresAt()` and verified `NotCaptured`;
-  4. if any earlier attempt verifies `Captured` or `Pending`, it refuses with the reason. A `Captured` result also triggers the normal capture pipeline.
-  - When it allows, earlier `Live` or `Expired` attempts are marked `Superseded`.
-  - The `GuardResult` carries `allowed: bool`, `reason: ?GuardRefusal`, and `nextAttemptNumber: int`.
+- **`(new AttemptGuard(Gateway $gateway, ?Closure $clock = null))->canStartNewAttempt(Payable $p): GuardResult`** (built in stage 4). Call it inside `Payable::lock()`, and create the new attempt in the same lock. It relies on `verifyCapture()` only (decided), never on order-status summaries. It allows a new attempt only when all of these hold:
+  1. `payableState()` is `Open` or `Frozen`; otherwise `GuardRefusal::PayableNotPayable`.
+  2. `settledBy()` is null (`AlreadySettled`), and no attempt is in state `Captured` (`AttemptCaptured`).
+  3. Every earlier attempt that may still be paid (`Created`, `Live`, `Expired`) is past `expiresAt()` **and** verifies as `NotCaptured`, `Reversed` or `NotFound`.
+     - An attempt that has not expired refuses with `AttemptStillLive`, and a `Live` one is returned as `reusableAttempt`.
+     - `Failed` and `Superseded` attempts need no check.
+  4. A verification of `Captured`, `AmountMismatch` or `CurrencyMismatch` refuses with `MoneyCaptured`; run the capture pipeline. `Pending` refuses with `VerificationPending`.
+  - When it allows, the host marks `GuardResult::$attemptsToSupersede` as `Superseded` and creates attempt `nextAttemptNumber` in state `Created`.
+  - `GuardResult` fields: `allowed`, `reason: ?GuardRefusal`, `nextAttemptNumber`, `attemptsToSupersede`, `reusableAttempt`, `blockingAttempt`, and `verifications` (by gateway order ID, for audit).
+- **Attempt lifecycle** (`AttemptState::canTransitionTo()`):
+  - `Created → Live | Failed`
+  - `Live → Captured | Expired | Superseded`
+  - `Expired → Captured | Superseded`
+  - `Superseded → Captured` (a late capture is still recorded; if the payable is already paid it is a double capture)
+  - `Captured` and `Failed` are final.
 - **Reuse rule:** while the newest attempt is `Live` and not expired, re-display its session instead of creating a new attempt. `retrieveSession()` can confirm the session's `order.id` and `order.amount`.
 
 #### D. Events (`IbnNajjaar\MIBGlobalPay\Laravel\Events\*`, all `final readonly`)
@@ -902,7 +914,8 @@ All rows are decided except Q4 and Q16, which wait on MIB.
 13. Is certificate (mutual TLS) authentication available, and on which host?
 14. What is the production gateway host name?
 15. Which API versions are supported, and is v100 recommended for production?
-16. **(new)** Which characters are actually accepted in `order.id` and `order.reference`? The reference says "any characters", 1–40. Are `/`, `(`, `)`, spaces and non-ASCII safe in both, including in the acquirer messages?
+16. Which characters are actually accepted in `order.id` and `order.reference`? The reference says "any characters", 1–40. Are `/`, `(`, `)`, spaces and non-ASCII safe in both, including in the acquirer messages?
+17. **(new)** What exact HTTP status and error body does Retrieve Order return for an unknown order? The package currently maps HTTP 404, or HTTP 400 whose text says "not found", to `NotFound` (unverified).
 
 | # | Question | Options / decision | Recommendation |
 |---|---|---|---|

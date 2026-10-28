@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace IbnNajjaar\MIBGlobalPay\Core\Reversal;
 
 use IbnNajjaar\MIBGlobalPay\Core\Contracts\Gateway;
-use IbnNajjaar\MIBGlobalPay\Core\Enums\TransactionType;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\GatewayException;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\MalformedPayload;
@@ -38,8 +37,8 @@ final readonly class ReversalHelper
         $policy = $this->gateway->config()->approvalPolicy;
 
         $target = null;
-        foreach ($order->transactionsOfType(TransactionType::Payment, TransactionType::Capture) as $transaction) {
-            if ($transaction->isApproved($policy) && $transaction->transactionId !== null) {
+        foreach ($order->transactions as $transaction) {
+            if ($transaction->type->movesMoneyIn() && $transaction->isApproved($policy) && $transaction->transactionId !== null) {
                 $target = $transaction;
             }
         }

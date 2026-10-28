@@ -33,6 +33,15 @@ enum OrderStatus: string implements GatewayEnum
     case RefundRequested = 'REFUND_REQUESTED';
     case Verified = 'VERIFIED';
 
+    /**
+     * FAILED, CANCELLED or AUTHENTICATION_UNSUCCESSFUL: the order ended without a payment.
+     * A convenience only; decisions about money use verifyCapture() and the Money totals.
+     */
+    public function isTerminalWithoutPayment(): bool
+    {
+        return in_array($this, [self::Failed, self::Cancelled, self::AuthenticationUnsuccessful], true);
+    }
+
     /** The gateway sent a value this version of the package does not know. */
     case Unrecognized = '';
 }
