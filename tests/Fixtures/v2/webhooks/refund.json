@@ -1,0 +1,8 @@
+{
+    "merchant": "TEST123",
+    "order": {"currency": "MVR", "id": "ISIMS-R-IUM-FN-2026-123-1", "status": "PARTIALLY_REFUNDED", "totalCapturedAmount": 1250.50, "totalRefundedAmount": 250},
+    "response": {"gatewayCode": "APPROVED"},
+    "result": "SUCCESS",
+    "transaction": {"amount": 250, "currency": "MVR", "id": "refund-1", "targetTransactionId": "1", "type": "REFUND"},
+    "version": "100"
+}

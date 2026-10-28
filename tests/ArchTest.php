@@ -63,3 +63,13 @@ arch('every v2 operation implements the Operation contract')
 arch('host contracts live in Core and have no Laravel dependency')
     ->expect('IbnNajjaar\MIBGlobalPay\Core\Attempts')
     ->not->toUse(['Illuminate', 'IbnNajjaar\MIBGlobalPay\Laravel']);
+
+arch('webhook notifications are final and readonly')
+    ->expect([
+        'IbnNajjaar\MIBGlobalPay\Core\Webhook\TransactionNotification',
+        'IbnNajjaar\MIBGlobalPay\Core\Webhook\AuthenticationNotification',
+        'IbnNajjaar\MIBGlobalPay\Core\Webhook\GenericNotification',
+        'IbnNajjaar\MIBGlobalPay\Core\Webhook\NotificationVerifier',
+    ])
+    ->toBeFinal()
+    ->toBeReadonly();

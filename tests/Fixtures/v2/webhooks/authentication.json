@@ -1,0 +1,7 @@
+{
+    "merchant": "TEST123",
+    "order": {"id": "ISIMS-R-IUM-FN-2026-123-1", "status": "AUTHENTICATED"},
+    "result": "SUCCESS",
+    "transaction": {"amount": 1250.50, "currency": "MVR", "id": "auth-1", "type": "AUTHENTICATION"},
+    "version": "100"
+}

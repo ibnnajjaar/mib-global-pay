@@ -26,6 +26,8 @@ Version 2.0.0 is in development. See [DESIGN-v2.md](./DESIGN-v2.md). Version 1.2
 
 - v2 attempts: host contracts `Payable`, `Attempt`, `PayableResolver`, `PayableState`, `AttemptState`, `ResolvedAttempt` and `Settlement` in `Core\Attempts`, and `AttemptGuard` (with `GuardResult` / `GuardRefusal`), which decides from `verifyCapture()` whether a new checkout attempt may start. Enum helpers `OrderStatus::isTerminalWithoutPayment()`, `TransactionType::movesMoneyIn()`, `isVoid()` and `reversesMoneyIn()`.
 
+- v2 webhooks: `NotificationVerifier` with a mandatory secret (fails closed, timing-safe), the `Notification` types (`TransactionNotification`, `AuthenticationNotification`, `GenericNotification`), and `NotificationStore` with `InMemoryNotificationStore` (dedupe on notification ID, and on order ID plus transaction ID).
+
 ### Included from the unreleased 1.2 work
 #### Added
 - Lifecycle operations on `MIBGlobalPayConnector`: `refund()`, `void()`, `capture()`, `updateAuthorization()` and `getTransactionDetails()`, backed by `RefundRequest`, `VoidRequest`, `CaptureRequest`, `UpdateAuthorizationRequest` and `RetrieveTransactionRequest`. All of them return `TransactionResponseData`.

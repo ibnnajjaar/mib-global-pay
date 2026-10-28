@@ -312,6 +312,25 @@ Facts from the Webhook Notifications guide:
 - `order.notificationUrl` overrides the URL configured in Merchant Administration. Later transactions use the URL they specify, or the last one used for the order.
 - The gateway itself says webhooks are not for critical flows ("Instead, you can use the Retrieve Transaction API"). This confirms the design rule that a notification is only a trigger for `verifyCapture()`.
 
+**Implemented in stage 5** (`Core\Webhook`):
+
+- `NotificationVerifier(#[SensitiveParameter] string $secret)` throws `ConfigurationException` on an empty secret, so it fails closed.
+- `verify(string $body, array $headers): Notification` works in this order:
+  1. Compares `X-Notification-Secret` with `hash_equals`, **before** parsing anything, and throws `SecretMismatch` on a mismatch.
+  2. Requires `X-Notification-ID`, and throws `MalformedNotification` without it.
+  3. Reads the optional `X-Notification-Attempt` header (a non-negative integer).
+  4. Requires a REST-JSON object body. NVP is rejected.
+  - Header lookup is case-insensitive and accepts plain or array header values.
+- Classification:
+  - `TransactionNotification`: a `transaction` object and `order.id`, and a type other than AUTHENTICATION. It exposes `orderId`, `orderStatus`, `orderTotalCaptured` (`?Money`, null when absent; verification treats that as a mismatch), `transaction` (`TransactionResponse`), `isMoneyIn()`, `isRefund()` and `isVoid()`.
+  - `AuthenticationNotification`: `transaction.type` AUTHENTICATION.
+  - `GenericNotification`: anything else verified, for example Payment Alerts. Its body is not modelled.
+  - All three implement `Notification` (`id()`, `attempt()`, `kind()`, `payload()`).
+- Invalid amounts or currencies → `MalformedNotification`.
+- `NotificationVerifier::unverified()` exists for tests and the fake only.
+- HTTPS-only delivery and the 2-second response are enforced by the HTTP layer (stage 6), not by the core.
+- `NotificationStore`: `claim(id, ?orderId)`, `release(id)`, `markProcessed(id, NotificationOutcome)`, `outcomeOf(id)`, and `claimTransaction(orderId, transactionId, outcome)` for the business-level dedupe. `InMemoryNotificationStore` implements it for tests and single-process use.
+
 ### 5.2 Dedupe and idempotency
 
 - `Notification::$id` comes from `X-Notification-Id` and is required: if it is missing, `MalformedNotification` is thrown. `$attempt` comes from `X-Notification-Attempt`.
@@ -710,6 +729,7 @@ Binding, in an ISIMS service provider: `$this->app->bind(PayableResolver::class,
   1. `payableState()` is `Open` or `Frozen`; otherwise `GuardRefusal::PayableNotPayable`.
   2. `settledBy()` is null (`AlreadySettled`), and no attempt is in state `Captured` (`AttemptCaptured`).
   3. Every earlier attempt that may still be paid (`Created`, `Live`, `Expired`) is past `expiresAt()` **and** verifies as `NotCaptured`, `Reversed` or `NotFound`.
+     - **Decided:** `NotFound` counts as safe to supersede. A Hosted Checkout order only appears at the gateway once the payer submits payment, so an unpaid, expired session reads as not found. *Caveat:* this depends on the unverified NotFound mapping (MIB question 17).
      - An attempt that has not expired refuses with `AttemptStillLive`, and a `Live` one is returned as `reusableAttempt`.
      - `Failed` and `Superseded` attempts need no check.
   4. A verification of `Captured`, `AmountMismatch` or `CurrencyMismatch` refuses with `MoneyCaptured`; run the capture pipeline. `Pending` refuses with `VerificationPending`.
@@ -916,6 +936,15 @@ All rows are decided except Q4 and Q16, which wait on MIB.
 15. Which API versions are supported, and is v100 recommended for production?
 16. Which characters are actually accepted in `order.id` and `order.reference`? The reference says "any characters", 1–40. Are `/`, `(`, `)`, spaces and non-ASCII safe in both, including in the acquirer messages?
 17. **(new)** What exact HTTP status and error body does Retrieve Order return for an unknown order? The package currently maps HTTP 404, or HTTP 400 whose text says "not found", to `NotFound` (unverified).
+18. **(new)** Webhook body format:
+    - Is our profile configured for REST-JSON notifications (the package rejects NVP)?
+    - Is the transaction-notification body exactly the operation's transaction response, including `order.totalCapturedAmount` and `order.currency`?
+    - What is the body shape of Payment Alerts notifications, and how are they distinguished from transaction notifications?
+19. **(new)** Webhook headers:
+    - Does `X-Notification-Attempt` start at 1?
+    - Is `X-Notification-ID` always present?
+    - Which header name casing is sent (the guide writes both `X-Notification-ID` and `X-Notification-Id`)?
+    - The package matches headers case-insensitively.
 
 | # | Question | Options / decision | Recommendation |
 |---|---|---|---|

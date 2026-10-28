@@ -1,0 +1,5 @@
+{
+    "_comment": "PLACEHOLDER: the Payment Alerts body shape is not documented in the MIB guide (MIB question 18). Used only to test the generic path.",
+    "merchant": "TEST123",
+    "alert": {"type": "RETRY_LIKELY", "originalTransactionId": "1"}
+}

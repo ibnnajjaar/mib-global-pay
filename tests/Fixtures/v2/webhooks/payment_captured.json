@@ -1,0 +1,18 @@
+{
+    "merchant": "TEST123",
+    "order": {
+        "amount": 1250.50,
+        "currency": "MVR",
+        "id": "ISIMS-R-IUM-FN-2026-123-1",
+        "reference": "(R)IUM/FN/2026/123",
+        "status": "CAPTURED",
+        "totalAuthorizedAmount": 1250.50,
+        "totalCapturedAmount": 1250.50,
+        "totalRefundedAmount": 0
+    },
+    "response": {"acquirerCode": "00", "gatewayCode": "APPROVED", "gatewayRecommendation": "PROCEED"},
+    "result": "SUCCESS",
+    "timeOfRecord": "2026-10-20T09:01:10.000Z",
+    "transaction": {"amount": 1250.50, "currency": "MVR", "id": "1", "receipt": "629312345678", "type": "PAYMENT"},
+    "version": "100"
+}
