@@ -1079,8 +1079,9 @@ All rows are decided except Q4 and Q16, which wait on MIB.
     - no `float` in public signatures under `Core\Money` or `Core\Responses`.
 - **Static analysis:** PHPStan 2 at level max, plus Larastan for the Laravel layer.
 - **Style:** Laravel Pint (decided, §12 Q9). It replaces php-cs-fixer when the tooling is swapped.
+- **Refactoring:** Rector as development tooling, checked in CI (`rector.php` records which rules are off and why). This is separate from Q8, which decided against shipping an upgrade set for consumers.
 - **CI matrix:** PHP 8.4 and 8.5 × Laravel 13 (`prefer-stable` and `prefer-lowest`). A separate core-only job runs without `illuminate/*` installed. Jobs: Pest with coverage, PHPStan and style.
-- Remove from the 1.x-era tooling: the PHP 7.2–8.3 jobs, the Guzzle 6 lowest-dependency job, the `phpunit.xml` `<whitelist>` schema, and the Docker image pinned to old PHP (update it to 8.4).
+- Remove from the 1.x-era tooling: the PHP 7.2–8.3 jobs, the Guzzle 6 lowest-dependency job, the `phpunit.xml` `<whitelist>` schema, and the Docker setup (removed entirely).
 - `composer.json`:
   - `"php": "^8.4"`, `"guzzlehttp/guzzle": "^7.9"` (or `psr/http-client` plus a discovery package);
   - `extra.laravel.providers`;

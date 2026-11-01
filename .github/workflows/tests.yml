@@ -45,6 +45,9 @@ jobs:
       - name: Code style (Pint)
         run: vendor/bin/pint --test
 
+      - name: Refactoring check (Rector)
+        run: vendor/bin/rector process --dry-run --no-progress-bar
+
       - name: Static analysis (PHPStan max + Larastan)
         run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
 

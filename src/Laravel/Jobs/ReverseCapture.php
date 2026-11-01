@@ -37,7 +37,7 @@ final class ReverseCapture implements ShouldQueue
 
     public function handle(Gateway $gateway, LoggerInterface $logger): void
     {
-        $outcome = (new ReversalHelper($gateway))->reverse($this->gatewayOrderId, $this->voidTransactionId, $this->refundTransactionId, 'DOUBLE-CAPTURE');
+        $outcome = new ReversalHelper($gateway)->reverse($this->gatewayOrderId, $this->voidTransactionId, $this->refundTransactionId, 'DOUBLE-CAPTURE');
 
         $logger->notice('MIB double capture auto-reversal', [
             'order' => $this->gatewayOrderId,

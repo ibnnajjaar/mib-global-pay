@@ -30,6 +30,6 @@ final readonly class AutoReverseDoubleCapture
             return;
         }
 
-        $this->bus->dispatch((new ReverseCapture($event->gatewayOrderId))->afterCommit());
+        $this->bus->dispatch(new ReverseCapture($event->gatewayOrderId)->afterCommit());
     }
 }

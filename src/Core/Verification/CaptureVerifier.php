@@ -27,7 +27,7 @@ use IbnNajjaar\MIBGlobalPay\Core\Responses\TransactionResponse;
  */
 final readonly class CaptureVerifier
 {
-    private const PENDING_CODES = [
+    private const array PENDING_CODES = [
         GatewayCode::Pending,
         GatewayCode::Submitted,
         GatewayCode::DeferredTransactionReceived,

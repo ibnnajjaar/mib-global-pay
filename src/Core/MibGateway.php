@@ -48,30 +48,30 @@ use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationResult;
  * A custom client is responsible for its own timeouts. Request and response bodies are logged
  * at debug level with secrets redacted.
  */
-final class MibGateway implements Gateway
+final readonly class MibGateway implements Gateway
 {
-    private readonly ClientInterface $http;
+    private ClientInterface $http;
 
-    private readonly RequestFactoryInterface $requests;
+    private RequestFactoryInterface $requests;
 
-    private readonly StreamFactoryInterface $streams;
+    private StreamFactoryInterface $streams;
 
-    private readonly LoggerInterface $logger;
+    private LoggerInterface $logger;
 
     /** @var \Closure(int): void */
-    private readonly \Closure $sleep;
+    private \Closure $sleep;
 
     /**
      * @param RetryPolicy|null       $retryPolicy opt-in; applies to idempotent operations only
      * @param (\Closure(int): void)|null $sleep   receives milliseconds; injectable for tests
      */
     public function __construct(
-        private readonly GatewayConfig $config,
+        private GatewayConfig $config,
         ?ClientInterface $httpClient = null,
         ?RequestFactoryInterface $requestFactory = null,
         ?StreamFactoryInterface $streamFactory = null,
         ?LoggerInterface $logger = null,
-        private readonly ?RetryPolicy $retryPolicy = null,
+        private ?RetryPolicy $retryPolicy = null,
         ?\Closure $sleep = null,
     ) {
         $factory = new HttpFactory();

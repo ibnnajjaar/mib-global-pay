@@ -25,11 +25,11 @@ use IbnNajjaar\MIBGlobalPay\Core\Exceptions\ConfigurationException;
  */
 final readonly class NotificationVerifier
 {
-    public const SECRET_HEADER = 'X-Notification-Secret';
+    public const string SECRET_HEADER = 'X-Notification-Secret';
 
-    public const ID_HEADER = 'X-Notification-ID';
+    public const string ID_HEADER = 'X-Notification-ID';
 
-    public const ATTEMPT_HEADER = 'X-Notification-Attempt';
+    public const string ATTEMPT_HEADER = 'X-Notification-Attempt';
 
     /**
      * @throws ConfigurationException when no secret is configured (fails closed)

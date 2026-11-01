@@ -17,7 +17,7 @@ use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
  */
 final class CheckoutRequest
 {
-    private const MAX_CUSTOM_FIELDS = 50;
+    private const int MAX_CUSTOM_FIELDS = 50;
 
     private InteractionOperation $operation = InteractionOperation::Purchase;
 

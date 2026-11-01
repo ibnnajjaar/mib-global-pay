@@ -15,7 +15,7 @@ use IbnNajjaar\MIBGlobalPay\Core\Webhook\NotificationOutcome;
  */
 final readonly class DatabaseNotificationStore implements NotificationStore
 {
-    public const TABLE = 'mib_global_pay_notifications';
+    public const string TABLE = 'mib_global_pay_notifications';
 
     public function __construct(
         private ConnectionInterface $db,

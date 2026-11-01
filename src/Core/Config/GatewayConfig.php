@@ -17,9 +17,9 @@ use IbnNajjaar\MIBGlobalPay\Core\Exceptions\ConfigurationException;
  */
 final readonly class GatewayConfig
 {
-    public const DEFAULT_API_VERSION = 100;
+    public const int DEFAULT_API_VERSION = 100;
 
-    public const DEFAULT_TIMEOUT = 30;
+    public const int DEFAULT_TIMEOUT = 30;
 
     public string $host;
 

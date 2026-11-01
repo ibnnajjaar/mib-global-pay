@@ -36,7 +36,7 @@ final class MibGlobalPay extends Facade
      */
     public static function fake(): MibGlobalPayFake
     {
-        $app = static::getFacadeApplication();
+        $app = self::getFacadeApplication();
         if ($app === null) {
             throw new \RuntimeException('MibGlobalPay::fake() needs a Laravel application');
         }
@@ -44,7 +44,7 @@ final class MibGlobalPay extends Facade
         $fake = new MibGlobalPayFake($app->make(GatewayConfig::class));
         $app->instance(Gateway::class, $fake);
         $app->forgetInstance(\IbnNajjaar\MIBGlobalPay\Laravel\MibGlobalPay::class);
-        static::clearResolvedInstance(static::getFacadeAccessor());
+        self::clearResolvedInstance(self::getFacadeAccessor());
 
         return $fake;
     }

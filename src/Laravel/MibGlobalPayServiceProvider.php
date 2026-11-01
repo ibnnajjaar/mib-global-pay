@@ -71,12 +71,10 @@ class MibGlobalPayServiceProvider extends ServiceProvider
         $this->app->singleton(MibGlobalPay::class);
         $this->app->singleton(WebhookRoute::class);
 
-        $this->app->singleton(NotificationStore::class, function (Application $app): NotificationStore {
-            return match ($store = $app->make(Settings::class)->notificationStore()) {
-                'database' => new DatabaseNotificationStore($app->make('db')->connection()),
-                'cache' => new CacheNotificationStore($app->make('cache')->store()),
-                default => throw new ConfigurationException("Unknown notification_store \"{$store}\"; expected \"database\" or \"cache\""),
-            };
+        $this->app->singleton(NotificationStore::class, fn (Application $app): NotificationStore => match ($store = $app->make(Settings::class)->notificationStore()) {
+            'database' => new DatabaseNotificationStore($app->make('db')->connection()),
+            'cache' => new CacheNotificationStore($app->make('cache')->store()),
+            default => throw new ConfigurationException("Unknown notification_store \"{$store}\"; expected \"database\" or \"cache\""),
         });
     }
 

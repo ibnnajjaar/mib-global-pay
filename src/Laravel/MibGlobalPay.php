@@ -31,7 +31,7 @@ use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationResult;
  */
 final readonly class MibGlobalPay
 {
-    public const WEBHOOK_ROUTE_NAME = 'mib-global-pay.webhook';
+    public const string WEBHOOK_ROUTE_NAME = 'mib-global-pay.webhook';
 
     public function __construct(
         private Gateway $gateway,

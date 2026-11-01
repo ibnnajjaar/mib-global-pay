@@ -17,7 +17,7 @@ final readonly class CacheNotificationStore implements NotificationStore
 {
     public const TTL_SECONDS = 5 * 24 * 3600;
 
-    private const PREFIX = 'mib-global-pay:';
+    private const string PREFIX = 'mib-global-pay:';
 
     public function __construct(
         private Repository $cache,

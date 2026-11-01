@@ -265,9 +265,10 @@ Every exception implements `Core\Exceptions\MibGlobalPayException`:
 composer test       # Pest 4 (PHPUnit 12), with Orchestra Testbench for the Laravel layer
 composer analyse    # PHPStan: core and Laravel layer at level max (Larastan)
 composer lint       # Pint
+composer refactor-check  # Rector, dry run (`composer refactor` applies the changes)
 ```
 
-Docker: `docker compose run --rm test`.
+[WORKFLOW.md](./WORKFLOW.md) shows the payment flow.
 
 ## License
 
