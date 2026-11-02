@@ -18,8 +18,10 @@ use IbnNajjaar\MIBGlobalPay\Laravel\Support\WebhookRoute;
 use IbnNajjaar\MIBGlobalPay\Core\Attempts\ResolvedAttempt;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\CheckoutRequest;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
+use IbnNajjaar\MIBGlobalPay\Core\Responses\CheckoutSession;
 use IbnNajjaar\MIBGlobalPay\Core\Contracts\OrderIdGenerator;
 use IbnNajjaar\MIBGlobalPay\Laravel\Outcome\OutcomeProcessor;
+use IbnNajjaar\MIBGlobalPay\Core\Requests\InteractionOperation;
 use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationResult;
 
 /**
@@ -79,6 +81,25 @@ final readonly class MibGlobalPay
         $url = $this->webhookUrl();
 
         return $url === null ? $request : $request->withNotificationUrl($url);
+    }
+
+    /**
+     * Starts a checkout that the outcome pipeline can follow, so PURCHASE only: the pipeline would
+     * report a successful AUTHORIZE, VERIFY or NONE as not captured, then as failed once it expires.
+     * For those, call gateway()->checkout()->initiate() and handle the outcome yourself.
+     *
+     * @throws InvalidRequest
+     */
+    public function initiateCheckout(CheckoutRequest $request): CheckoutSession
+    {
+        if ($request->operation() !== InteractionOperation::Purchase) {
+            throw new InvalidRequest(sprintf(
+                'The outcome pipeline supports PURCHASE only, not %s. Use gateway()->checkout()->initiate() and handle the outcome yourself.',
+                $request->operation()->value,
+            ));
+        }
+
+        return $this->gateway->checkout()->initiate($request);
     }
 
     /**

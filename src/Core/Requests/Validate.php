@@ -90,13 +90,31 @@ final class Validate
     }
 
     /**
-     * A positive amount in a currency allowed by the configuration.
+     * For URLs the gateway only accepts over HTTPS, whatever allowInsecureUrls says.
      *
      * @throws InvalidRequest
      */
-    public static function amount(Money $amount, string $field, GatewayConfig $config): Money
+    public static function httpsUrl(?string $value, string $field): ?string
     {
-        if (! $amount->isPositive()) {
+        if ($value !== null && strtolower((string) parse_url($value, PHP_URL_SCHEME)) !== 'https') {
+            throw new InvalidRequest("{$field} must use HTTPS");
+        }
+
+        return $value;
+    }
+
+    /**
+     * A positive amount (or zero, with $allowZero) in a currency allowed by the configuration.
+     *
+     * @throws InvalidRequest
+     */
+    public static function amount(Money $amount, string $field, GatewayConfig $config, bool $allowZero = false): Money
+    {
+        if ($allowZero && $amount->isNegative()) {
+            throw new InvalidRequest("{$field} must not be negative");
+        }
+
+        if (! $allowZero && ! $amount->isPositive()) {
             throw new InvalidRequest("{$field} must be greater than zero");
         }
 

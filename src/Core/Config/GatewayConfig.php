@@ -19,6 +19,9 @@ final readonly class GatewayConfig
 {
     public const int DEFAULT_API_VERSION = 100;
 
+    /** Initiate Checkout needs v63, and Checkout.configure() with only a session needs v67. */
+    public const int MIN_API_VERSION = 67;
+
     public const int DEFAULT_TIMEOUT = 30;
 
     public string $host;
@@ -57,8 +60,8 @@ final readonly class GatewayConfig
             throw new ConfigurationException('Order prefix (MIB_ORDER_PREFIX) is required: 1-10 characters from A-Z, a-z and 0-9');
         }
 
-        if ($apiVersion < 1) {
-            throw new ConfigurationException('API version must be a positive integer');
+        if ($apiVersion < self::MIN_API_VERSION) {
+            throw new ConfigurationException(sprintf('API version must be %d or later', self::MIN_API_VERSION));
         }
 
         if ($timeout < 1) {

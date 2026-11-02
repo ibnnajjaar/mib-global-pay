@@ -60,6 +60,7 @@ it('rejects invalid configuration', function (array $overrides, string $message)
     'bad host' => [['host' => 'not a host'], 'Invalid gateway host'],
     'bad environment' => [['environment' => 'staging'], 'Unknown environment'],
     'zero version' => [['api_version' => 0], 'API version'],
+    'version below the floor' => [['api_version' => 66], 'API version must be 67 or later'],
     'zero timeout' => [['timeout' => '0'], 'Timeout'],
     'non-numeric timeout' => [['timeout' => 'abc'], 'timeout must be an integer'],
     'unknown currency' => [['currencies' => 'MVR,XYZ'], 'Unsupported currency'],
@@ -89,6 +90,10 @@ it('can be built with named arguments', function () {
     $config = new GatewayConfig(merchantId: 'TEST123', apiPassword: 'secret', orderPrefix: 'ISIMS', apiVersion: 85);
 
     expect($config->baseUrl())->toContain('/version/85/');
+});
+
+it('accepts the lowest supported API version', function () {
+    expect(gatewayConfig(['api_version' => 67])->apiVersion)->toBe(67);
 });
 
 it('does not leak the API password in debug output', function () {

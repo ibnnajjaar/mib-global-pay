@@ -17,6 +17,10 @@ Version 2 is a rewrite; see [UPGRADE.md](./UPGRADE.md). Install it with the comm
 - The Docker development setup (`Dockerfile`, `docker-compose.yml`, `.dockerignore`).
 
 ### Changed
+- `MibGlobalPay::initiateCheckout()` in the Laravel layer throws `InvalidRequest` for anything but `PURCHASE`, because the outcome pipeline can't follow other operations. `MibGlobalPay::gateway()->checkout()->initiate()` still sends them.
+- `GatewayConfig` rejects API versions below 67.
+- The merchant logo URL must use HTTPS even when `allow_insecure_urls` is on, because the gateway requires it.
+- The checkout component shows the payer a message when Checkout.js reports an error or fails to load. It no longer sets an empty `cancel` callback, so the gateway's own cancel behaviour applies unless you pass one.
 - **Breaking:** requires PHP `^8.4`. PHP 7.2 to 8.3 are no longer supported.
 - **Breaking:** requires `guzzlehttp/guzzle` `^7.9` and `psr/http-message` `^2.0`. Guzzle 6 and `psr/http-message` 1.x are no longer supported.
 - `illuminate/support` (`^12.0 || ^13.0`) is suggested for the optional Laravel 12 and 13 layer. It is not required.
@@ -26,6 +30,10 @@ Version 2 is a rewrite; see [UPGRADE.md](./UPGRADE.md). Install it with the comm
 - Tooling: the test suite runs on Pest 4 (PHPUnit 12) with Orchestra Testbench. Laravel Pint replaces php-cs-fixer and is checked in CI. PHPStan runs at level max over all of `src`, with Larastan. Rector is added as a development tool, checked in CI, with a config chosen for this package (`rector.php`). CI tests PHP 8.4 and 8.5, each on Laravel 12 and Laravel 13.
 
 ### Added
+- `CheckoutRequest::withDisplayControl()` with the `FieldDisplay`, `ShippingDisplay` and `PaymentTermsDisplay` enums, for the billing address, customer email, shipping and payment terms.
+- `CheckoutRequest::forVerification()`, for a `VERIFY` checkout. It is the only one that may send a zero amount.
+- `CheckoutRequest::operation()`.
+- The checkout component takes `mode="embedded"`, and `error`, `cancel`, `complete`, `timeout`, `before-redirect` and `after-redirect` callback props.
 - An MIT `LICENSE` file, included in the package archive.
 - v2 core types under `IbnNajjaar\MIBGlobalPay\Core`: `Money` (minor units, explicit rounding, no float paths), the `Currency` enum (curated ISO 4217 subset), the gateway enums (`OrderStatus`, `TransactionType`, `Result`, `GatewayCode`, `GatewayRecommendation`) with an `Unrecognized` fallback, `ApprovalPolicy`, the null-safe `Payload` reader, `GatewayConfig` with environment presets, and the exception hierarchy (`MibGlobalPayException` marker interface).
 

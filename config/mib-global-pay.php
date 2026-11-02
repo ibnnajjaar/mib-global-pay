@@ -20,6 +20,7 @@ return [
 
     'api_password' => env('MIB_API_PASSWORD'),
 
+    // 67 or later.
     'api_version' => env('MIB_API_VERSION', 100),
 
     // Seconds, for the default Guzzle client.

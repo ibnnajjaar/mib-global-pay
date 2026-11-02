@@ -60,6 +60,14 @@ final class CheckoutRequest
 
     private ?CardSecurityCodeDisplay $cardSecurityCode = null;
 
+    private ?FieldDisplay $billingAddressDisplay = null;
+
+    private ?FieldDisplay $customerEmailDisplay = null;
+
+    private ?ShippingDisplay $shippingDisplay = null;
+
+    private ?PaymentTermsDisplay $paymentTermsDisplay = null;
+
     private ?ThreeDSecureAction $threeDSecure = null;
 
     private ?TransactionSource $transactionSource = null;
@@ -98,6 +106,41 @@ final class CheckoutRequest
         );
     }
 
+    /**
+     * A VERIFY checkout, the only operation that may send a zero amount. It moves no money, so it
+     * must not go through verifyCapture(), AttemptGuard or PaymentOutcome (see withOperation()).
+     *
+     * @param string $orderId      a new, never reused gateway order ID (1-40 characters)
+     * @param string $merchantName shown to the payer (1-40 characters)
+     * @param string $returnUrl    where the payer returns; resultIndicator is appended
+     *
+     * @throws InvalidRequest
+     */
+    public static function forVerification(string $orderId, Money $amount, string $merchantName, string $returnUrl): self
+    {
+        if ($amount->isNegative()) {
+            throw new InvalidRequest('Order amount must not be negative');
+        }
+
+        $request = new self(
+            Validate::identifier($orderId, 'Order ID'),
+            $amount,
+            Validate::identifier($merchantName, 'Merchant name'),
+            Validate::urlShape($returnUrl, 'Return URL') ?? throw new InvalidRequest('Return URL is required'),
+        );
+        $request->operation = InteractionOperation::Verify;
+
+        return $request;
+    }
+
+    /**
+     * interaction.operation. Defaults to PURCHASE.
+     *
+     * verifyCapture(), AttemptGuard and the Laravel outcome pipeline only understand money captured
+     * in full, so they support PURCHASE only. AUTHORIZE, VERIFY and NONE leave no captured total, so
+     * a successful one reads as NotCaptured. Handle these flows yourself, from the gateway's order
+     * and transaction responses.
+     */
     public function withOperation(InteractionOperation $operation): self
     {
         return $this->copy(fn (self $c) => $c->operation = $operation);
@@ -285,6 +328,25 @@ final class CheckoutRequest
         return $this->copy(fn (self $c) => $c->cardSecurityCode = $display);
     }
 
+    /**
+     * interaction.displayControl.*: how the payment page shows these details. Replaces all four, so
+     * leaving one out clears it and the gateway's default applies. A READ_ONLY field needs its data
+     * in the request, which withExtraFields() can supply (billing, customer, shipping).
+     */
+    public function withDisplayControl(
+        ?FieldDisplay $billingAddress = null,
+        ?FieldDisplay $customerEmail = null,
+        ?ShippingDisplay $shipping = null,
+        ?PaymentTermsDisplay $paymentTerms = null,
+    ): self {
+        return $this->copy(function (self $c) use ($billingAddress, $customerEmail, $shipping, $paymentTerms): void {
+            $c->billingAddressDisplay = $billingAddress;
+            $c->customerEmailDisplay = $customerEmail;
+            $c->shippingDisplay = $shipping;
+            $c->paymentTermsDisplay = $paymentTerms;
+        });
+    }
+
     public function withThreeDSecure(ThreeDSecureAction $action): self
     {
         return $this->copy(fn (self $c) => $c->threeDSecure = $action);
@@ -314,6 +376,11 @@ final class CheckoutRequest
         return $this->copy(fn (self $c) => $c->extraFields = $fields);
     }
 
+    public function operation(): InteractionOperation
+    {
+        return $this->operation;
+    }
+
     public function reference(): ?string
     {
         return $this->reference;
@@ -333,7 +400,7 @@ final class CheckoutRequest
      */
     public function toBody(GatewayConfig $config): array
     {
-        Validate::amount($this->amount, 'Order amount', $config);
+        Validate::amount($this->amount, 'Order amount', $config, allowZero: $this->operation === InteractionOperation::Verify);
 
         if ($this->notificationUrl === null && ! $this->withoutWebhook) {
             throw new InvalidRequest('Set a notification URL with withNotificationUrl(), or call withoutWebhook() explicitly');
@@ -348,7 +415,7 @@ final class CheckoutRequest
                     'url' => Validate::url($this->merchantUrl, 'Merchant URL', $config),
                     'email' => $this->merchantEmail,
                     'phone' => $this->merchantPhone,
-                    'logo' => Validate::url($this->merchantLogoUrl, 'Merchant logo URL', $config),
+                    'logo' => Validate::httpsUrl($this->merchantLogoUrl, 'Merchant logo URL'),
                     'address' => ['line1' => $this->merchantAddressLine1],
                 ],
                 'returnUrl' => Validate::url($this->returnUrl, 'Return URL', $config),
@@ -359,7 +426,13 @@ final class CheckoutRequest
                 'retryAttemptCount' => $this->retryAttemptCount,
                 'locale' => $this->locale,
                 'style' => ['accentColor' => $this->accentColor, 'theme' => $this->theme],
-                'displayControl' => ['cardSecurityCode' => $this->cardSecurityCode?->value],
+                'displayControl' => [
+                    'cardSecurityCode' => $this->cardSecurityCode?->value,
+                    'billingAddress' => $this->billingAddressDisplay?->value,
+                    'customerEmail' => $this->customerEmailDisplay?->value,
+                    'shipping' => $this->shippingDisplay?->value,
+                    'paymentTerms' => $this->paymentTermsDisplay?->value,
+                ],
                 'action' => ['3DSecure' => $this->threeDSecure?->value],
             ],
             'order' => [

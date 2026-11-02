@@ -113,7 +113,7 @@ $gateway = new MibGateway(new GatewayConfig(
 ));
 ```
 
-Defaults: API version 100, 30 s timeout, currencies `[MVR]`, HTTPS-only URLs. Pass a PSR-3 logger
+Defaults: API version 100 (67 is the lowest accepted), 30 s timeout, currencies `[MVR]`, HTTPS-only URLs. Pass a PSR-3 logger
 (bodies are logged with secrets redacted) and, if you want, an opt-in `RetryPolicy` for idempotent
 operations (`RetryPolicy::gatewayRecommended()` resends once after 60 s, as MIB advises).
 
@@ -143,6 +143,20 @@ $session = $gateway->initiateCheckout(
 
 Redirect the payer with Checkout.js (`https://{host}/static/checkout/checkout.min.js`):
 `Checkout.configure({ session: { id: sessionId } }); Checkout.showPaymentPage();`
+
+`withDisplayControl()` sets how the page shows the billing address, customer email, shipping details
+and payment terms. A `READ_ONLY` field needs its data in the request, which `withExtraFields()` can supply.
+
+**`verifyCapture()` and `AttemptGuard` support `PURCHASE` only**, the default operation. They only
+understand money captured in full, so:
+
+- A successful `AUTHORIZE`, `VERIFY` or `NONE` reads as `NotCaptured`. Once the attempt expires, `AttemptGuard`
+  allows a new attempt, even if the first one still holds the payer's funds.
+- A partial capture reads as `AmountMismatch`.
+
+If you use `withOperation()` for these flows, or capture part of an order, handle the outcome yourself from
+`retrieveOrder()`. `CheckoutRequest::forVerification()` starts a `VERIFY` checkout, the only one that may
+send a zero amount.
 
 ### Verify
 
@@ -344,11 +358,22 @@ All keys: `config/mib-global-pay.php` (`php artisan vendor:publish --tag=mib-glo
    ```blade
    <x-mib-global-pay::checkout :session="$session->sessionId" />
    ```
+   `MibGlobalPay::initiateCheckout()` throws `InvalidRequest` for anything but `PURCHASE`, because the outcome pipeline
+   can't follow other operations. For those, call `MibGlobalPay::gateway()->checkout()->initiate($request)` and handle the
+   outcome yourself.
+
+   The component redirects to the Payment Page. Add `mode="embedded"` to show the Embedded Page inside the component's
+   element instead. If Checkout.js reports an error, the element shows a message to the payer. To handle a callback
+   yourself, name a global JavaScript function with `error`, `cancel`, `complete`, `timeout`, `before-redirect` or
+   `after-redirect`. `cancel` works with the Payment Page only, so the component refuses it in embedded mode. For a modal,
+   write the Checkout.js code yourself.
+
    Before a retry, call `MibGlobalPay::attemptGuard()->canStartNewAttempt($payable)` inside the lock. It asks the bank about every
    open attempt. If one is already paid, it refuses with `MoneyCaptured` and dispatches `PaymentCaptured` itself. If a live
    attempt is still unpaid, it returns it as `reusableAttempt`. Otherwise it allows a new attempt and lists the old ones to mark
    `Superseded`. Your `Payable::lock()` must be re-entrant (nested `DB::transaction` is).
-6. **Return URL:** `app(PaymentOutcome::class)->resolveFromReturn($orderId, $request->query())`.
+6. **Return URL:** `app(PaymentOutcome::class)->resolveFromReturn($orderId, $request->query())`. The gateway only documents
+   adding `resultIndicator` to the URL, so put the order ID in your own return URL, for example as a route parameter.
 7. **Schedule** `mib:reconcile` (every few minutes) and `mib:prune-notifications` (daily). Pruning keeps money-event
    delivery records, about one small row per event, because `mib:reconcile`, `AttemptGuard` and the return URL can reach an
    attempt at any time. With the cache store they have no expiry either.

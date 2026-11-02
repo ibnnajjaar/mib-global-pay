@@ -4,14 +4,20 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Blade;
+use IbnNajjaar\MIBGlobalPay\Core\Money\Money;
+use IbnNajjaar\MIBGlobalPay\Core\Money\Currency;
 use IbnNajjaar\MIBGlobalPay\Laravel\Events\Source;
 use IbnNajjaar\MIBGlobalPay\Core\Attempts\Settlement;
 use IbnNajjaar\MIBGlobalPay\Tests\Support\ArrayLogger;
 use IbnNajjaar\MIBGlobalPay\Core\Attempts\PayableState;
 use IbnNajjaar\MIBGlobalPay\Core\Support\TransactionId;
 use IbnNajjaar\MIBGlobalPay\Laravel\Jobs\ReverseCapture;
+use IbnNajjaar\MIBGlobalPay\Laravel\Facades\MibGlobalPay;
 use IbnNajjaar\MIBGlobalPay\Tests\Support\GatewayHarness;
+use IbnNajjaar\MIBGlobalPay\Core\Requests\CheckoutRequest;
+use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
 use IbnNajjaar\MIBGlobalPay\Laravel\Outcome\OutcomeProcessor;
+use IbnNajjaar\MIBGlobalPay\Core\Requests\InteractionOperation;
 
 function doubleCapture(): void
 {
@@ -86,4 +92,58 @@ it('escapes the session ID and honours MIB_CHECKOUT_JS_URL', function () {
 
     expect($html)->toContain('https://cdn.example.test/checkout.js')
         ->not->toContain('</script><script>alert(1)');
+});
+
+it('sets only the error callback by default, with a message the payer can see', function () {
+    $html = Blade::render('<x-mib-global-pay::checkout session="S1" />');
+
+    expect($html)->toContain('data-error="mibGlobalPayError"')
+        ->not->toContain('data-cancel')
+        ->toContain('The payment page could not be loaded')
+        ->toContain("typeof Checkout === 'undefined'");
+});
+
+it('renders the Embedded Page in its own element', function () {
+    $html = Blade::render('<x-mib-global-pay::checkout session="S1" mode="embedded" id="pay-here" />');
+
+    expect($html)->toContain('id="pay-here"')
+        ->toContain("Checkout.showEmbeddedPage('#' + CSS.escape('pay-here'))")
+        ->not->toContain('Checkout.showPaymentPage()');
+});
+
+it('passes host callbacks to Checkout.js', function () {
+    $html = Blade::render('<x-mib-global-pay::checkout session="S1" error="onError" cancel="onCancel" complete="onComplete" timeout="onTimeout" before-redirect="Checkout.saveFormFields" after-redirect="Checkout.restoreFormFields" />');
+
+    expect($html)->toContain('data-error="onError"')
+        ->toContain('data-cancel="onCancel"')
+        ->toContain('data-complete="onComplete"')
+        ->toContain('data-timeout="onTimeout"')
+        ->toContain('data-beforeRedirect="Checkout.saveFormFields"')
+        ->toContain('data-afterRedirect="Checkout.restoreFormFields"');
+});
+
+it('refuses a bad checkout component setup', function (string $component, string $message) {
+    expect(fn () => Blade::render($component))->toThrow($message);
+})->with([
+    'unknown mode' => ['<x-mib-global-pay::checkout session="S1" mode="modal" />', 'Checkout mode'],
+    'cancel on the Embedded Page' => ['<x-mib-global-pay::checkout session="S1" mode="embedded" cancel="onCancel" />', 'Payment Page only'],
+    'callback that is not a function name' => ['<x-mib-global-pay::checkout session="S1" error="alert(1)" />', 'global JavaScript function'],
+]);
+
+it('refuses checkouts the outcome pipeline cannot follow, but allows them on the gateway', function (InteractionOperation $operation) {
+    $fake = MibGlobalPay::fake();
+    $request = CheckoutRequest::create('O-1', Money::of('10', Currency::Mvr), 'M', 'https://x.mv/r')->withoutWebhook()->withOperation($operation);
+
+    expect(fn () => MibGlobalPay::initiateCheckout($request))->toThrow(InvalidRequest::class, 'PURCHASE only');
+    $fake->assertCheckoutNotInitiated();
+
+    expect(MibGlobalPay::gateway()->checkout()->initiate($request)->sessionId)->not->toBe('');
+})->with([[InteractionOperation::Authorize], [InteractionOperation::Verify], [InteractionOperation::None]]);
+
+it('starts a PURCHASE checkout through the facade', function () {
+    $fake = MibGlobalPay::fake();
+
+    MibGlobalPay::initiateCheckout(CheckoutRequest::create('O-1', Money::of('10', Currency::Mvr), 'M', 'https://x.mv/r')->withoutWebhook());
+
+    $fake->assertCheckoutInitiated();
 });

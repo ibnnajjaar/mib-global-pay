@@ -36,7 +36,7 @@ Facts about the gateway in this document come from the MIB test-gateway document
 
 - The package will **not** own the host's Payment or Invoice models, migrations or business rules. ISIMS keeps those.
 - It will not handle direct card capture (PCI scope). Hosted Checkout stays the only payer flow.
-- It will not support Laravel < 13 or PHP < 8.4.
+- It will not support Laravel < 12 or PHP < 8.4.
 
 ---
 
@@ -1188,7 +1188,7 @@ The "Phase" column follows the decision in §14.0.
 
 **2.0.0** covers:
 
-- the Hosted Checkout lifecycle: Initiate Checkout (WEBSITE) with all interaction options, the Checkout.js helper and component, Retrieve Order, Retrieve Transaction, Capture, Refund, Void and Update Authorization;
+- the Hosted Checkout lifecycle: Initiate Checkout (WEBSITE) with the interaction options in §14.1, the Checkout.js component, Retrieve Order, Retrieve Transaction, Capture, Refund, Void and Update Authorization;
 - Retrieve Session;
 - Update Session, **marked experimental**;
 - Check Gateway;
@@ -1210,7 +1210,7 @@ The "Phase" column follows the decision in §14.0.
 | Retrieve Session | `GET /session/{sessionId}` | no | Doc | `retrieveSession(string): SessionDetails` | The response includes `order.id`, `order.amount`, `interaction.operation` and `session.updateStatus`. Useful for confirming what a live session will charge. | 2.0 |
 | Update Session | `PUT /session/{sessionId}` | no | Doc, but the HCO guide says Hosted Session ops are "not needed" for HCO (Q4) | `updateSession(string, SessionUpdate): SessionDetails` | Support for changing amount or order on a live HCO session is unconfirmed. Use `session.version` for optimistic locking. | 2.0, experimental |
 | Create Session (Hosted Session / session authentication) | `POST /session` (no apiOperation) | no | Doc | `createSession(): Session` | Belongs to the Hosted Session (card-fields) integration and to 3DS session authentication. Not needed for HCO. | 2.x |
-| Embedded page / payment page / modal (Checkout.js) | client-side `Checkout.configure({session})`, `showPaymentPage()` / `showEmbeddedPage()` | README snippet only | Doc | Laravel Blade component `<x-mib-global-pay::checkout>`. Core: a `CheckoutJs::scriptUrl($host)` helper. | From v67, `configure()` accepts only `session`; everything else goes in Initiate Checkout. | 2.0 |
+| Embedded page / payment page / modal (Checkout.js) | client-side `Checkout.configure({session})`, `showPaymentPage()` / `showEmbeddedPage()` | README snippet only | Doc | Laravel Blade component `<x-mib-global-pay::checkout>` with `mode` (payment or embedded) and callback props. A modal is written by the host. | From v67, `configure()` accepts only `session`; everything else goes in Initiate Checkout, so `GatewayConfig` rejects versions below 67. | 2.0 |
 | Payment plans / instalments on HCO | `constraints.paymentPlans.*` on Initiate Checkout; `Payment Plan: Plan Offers Inquiry` | no | **MIB?** "agree the available payment plans with your acquirer". Unlikely. | `CheckoutRequest::withPaymentPlanConstraints()`, `planOffersInquiry()` | | 2.x |
 | Non-eCommerce source (MOTO, call centre) | `transaction.source` | yes | MIB? (must be on the merchant-acquirer link) | `CheckoutRequest::withTransactionSource(TransactionSource)` | Payer-present options are disabled when the source is not INTERNET. | 2.0 |
 
