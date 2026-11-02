@@ -72,8 +72,8 @@ class MibGlobalPayServiceProvider extends ServiceProvider
         $this->app->singleton(WebhookRoute::class);
 
         $this->app->singleton(NotificationStore::class, fn (Application $app): NotificationStore => match ($store = $app->make(Settings::class)->notificationStore()) {
-            'database' => new DatabaseNotificationStore($app->make('db')->connection()),
-            'cache' => new CacheNotificationStore($app->make('cache')->store()),
+            'database' => new DatabaseNotificationStore($app->make('db')->connection(), $app->make('db.transactions')),
+            'cache' => new CacheNotificationStore($app->make('cache')->store(), $app->bound('db.transactions') ? $app->make('db.transactions') : null),
             default => throw new ConfigurationException("Unknown notification_store \"{$store}\"; expected \"database\" or \"cache\""),
         });
     }
@@ -130,14 +130,10 @@ class MibGlobalPayServiceProvider extends ServiceProvider
     /** @internal the body of the Route::mibGlobalPayWebhook() macro */
     public static function webhookRoute(Router $router, string $uri): Route
     {
-        $route = $router->post($uri, WebhookController::class)
+        // Marked so it can be found even after route:cache, where a host group's name prefix or domain is all that is left.
+        return WebhookRoute::mark($router->post($uri, WebhookController::class))
             ->name(MibGlobalPay::WEBHOOK_ROUTE_NAME)
             ->middleware(VerifyNotificationSecret::class)
             ->withoutMiddleware([ValidateCsrfToken::class, VerifyCsrfToken::class]);
-
-        // Remember the Route itself: a host group may prefix its name or set its domain.
-        \Illuminate\Container\Container::getInstance()->make(WebhookRoute::class)->remember($route);
-
-        return $route;
     }
 }

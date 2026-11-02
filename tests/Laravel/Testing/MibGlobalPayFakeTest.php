@@ -8,16 +8,25 @@ use IbnNajjaar\MIBGlobalPay\Core\Money\Currency;
 use IbnNajjaar\MIBGlobalPay\Core\Contracts\Gateway;
 use IbnNajjaar\MIBGlobalPay\Core\Enums\GatewayCode;
 use IbnNajjaar\MIBGlobalPay\Core\Enums\OrderStatus;
+use IbnNajjaar\MIBGlobalPay\Core\Attempts\AttemptGuard;
+use IbnNajjaar\MIBGlobalPay\Core\Attempts\AttemptState;
 use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\Refund;
+use IbnNajjaar\MIBGlobalPay\Core\Reversal\ReversalHelper;
+use IbnNajjaar\MIBGlobalPay\Core\Reversal\ReversalMethod;
 use IbnNajjaar\MIBGlobalPay\Laravel\Facades\MibGlobalPay;
 use IbnNajjaar\MIBGlobalPay\Laravel\Testing\OrderFactory;
 use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\Capture;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\CheckoutRequest;
+use IbnNajjaar\MIBGlobalPay\Tests\Support\InMemoryAttempt;
+use IbnNajjaar\MIBGlobalPay\Tests\Support\InMemoryPayable;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\GatewayException;
 use IbnNajjaar\MIBGlobalPay\Laravel\Testing\MibGlobalPayFake;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\TransportException;
+use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\RetrieveOrder;
 use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationStatus;
+use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\VoidTransaction;
+use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\RetrieveTransaction;
 
 function mvrAmount(string $amount = '1250.50'): Money
 {
@@ -56,6 +65,71 @@ it('returns gateway-like defaults for unstubbed calls', function () {
         ->and($fake->paymentOptionsInquiry()->cardCurrencies)->toBe(['MVR']);
 
     expect(fn () => $fake->retrieveOrder('UNKNOWN'))->toThrow(GatewayException::class);
+});
+
+it('answers an unknown order and an unknown transaction in the gateway error format', function () {
+    $fake = MibGlobalPay::fake();
+
+    foreach ([fn () => $fake->retrieveOrder('UNKNOWN'), fn () => $fake->retrieveTransaction('UNKNOWN', 'void-1')] as $call) {
+        try {
+            $call();
+            $this->fail('Expected a GatewayException');
+        } catch (GatewayException $e) {
+            expect($e->httpStatus())->toBe(404)
+                ->and($e->isGatewayError())->toBeTrue()
+                ->and($e->cause())->toBe('INVALID_REQUEST')
+                ->and($e->rawBody())->toBeJson();
+        }
+    }
+});
+
+it('treats a stubbed exception by the same rule as the real gateway client', function (GatewayException $e, bool $notFound) {
+    $fake = MibGlobalPay::fake()->respondWith(RetrieveOrder::class, $e);
+
+    if ($notFound) {
+        expect($fake->verifyCapture('O-1', mvrAmount())->status)->toBe(VerificationStatus::NotFound);
+
+        return;
+    }
+
+    expect(fn () => $fake->verifyCapture('O-1', mvrAmount()))->toThrow(GatewayException::class);
+})->with([
+    'HTML from a wrong host' => [fn () => new GatewayException('HTTP 404', 404, [], '<html>Not Found</html>'), false],
+    'no raw body' => [fn () => new GatewayException('HTTP 404', 404, ['cause' => 'INVALID_REQUEST']), false],
+    'gateway error' => [fn () => new GatewayException('x', 404, ['cause' => 'INVALID_REQUEST'], '{"result":"ERROR","error":{"cause":"INVALID_REQUEST"}}'), true],
+]);
+
+it('runs AttemptGuard against the fake as against the real client', function () {
+    $amount = mvrAmount();
+    $attempt = new InMemoryAttempt(1, 'O-1', $amount, AttemptState::Expired, new DateTimeImmutable('-1 hour'));
+    $payable = new InMemoryPayable($amount, attempts: [$attempt]);
+
+    expect(new AttemptGuard(MibGlobalPay::fake())->canStartNewAttempt($payable)->allowed)->toBeTrue();
+
+    $wrongHost = MibGlobalPay::fake()->respondWith(RetrieveOrder::class, new GatewayException('HTTP 404', 404, [], '<html>Not Found</html>'));
+
+    expect(fn () => new AttemptGuard($wrongHost)->canStartNewAttempt($payable))->toThrow(GatewayException::class);
+});
+
+it('sends no refund through the fake when the void read is not a gateway error', function () {
+    $rejected = new GatewayException('x', 400, ['cause' => 'INVALID_REQUEST'], '{"result":"ERROR","error":{"cause":"INVALID_REQUEST"}}');
+    $fake = MibGlobalPay::fake()
+        ->order('O-1', OrderFactory::captured(mvrAmount()))
+        ->respondWith(VoidTransaction::class, $rejected)
+        ->respondWith(RetrieveTransaction::class, new GatewayException('HTTP 404', 404, [], '<html>Not Found</html>'));
+
+    expect(fn () => new ReversalHelper($fake)->reverseWithDerivedIds('O-1'))->toThrow(GatewayException::class);
+    expect(fn () => $fake->assertRefunded())->toThrow(AssertionFailedError::class);
+});
+
+it('refunds through the fake when the gateway says the void is unknown', function () {
+    $rejected = new GatewayException('x', 400, ['cause' => 'INVALID_REQUEST'], '{"result":"ERROR","error":{"cause":"INVALID_REQUEST"}}');
+    $fake = MibGlobalPay::fake()
+        ->order('O-1', OrderFactory::captured(mvrAmount()))
+        ->respondWith(VoidTransaction::class, $rejected);
+
+    expect(new ReversalHelper($fake)->reverseWithDerivedIds('O-1')->method)->toBe(ReversalMethod::Refund);
+    $fake->assertRefunded();
 });
 
 it('uses checkout session stubs per order or for any order', function () {

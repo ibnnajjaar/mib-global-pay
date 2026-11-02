@@ -1,20 +1,47 @@
 # MIB Global Pay
 
 [![Tests](https://github.com/ibnnajjaar/mib-global-pay/workflows/Tests/badge.svg)](https://github.com/ibnnajjaar/mib-global-pay/actions)
-![Code Coverage Badge](./.github/coverage.svg)
+![Code Coverage Badge](https://raw.githubusercontent.com/ibnnajjaar/mib-global-pay/main/.github/coverage.svg)
 
 PHP client for **MIB (Maldives Islamic Bank) Global Pay**, the Mastercard Payment Gateway Services
-(MPGS) **Hosted Checkout**, with an optional **Laravel 13** layer.
+(MPGS) **Hosted Checkout**, with an optional **Laravel 12 and 13** layer.
 
-> **Version 2** requires PHP 8.4+. Upgrading from 1.1: see [UPGRADE.md](./UPGRADE.md). The design
-> and every decision are in [DESIGN-v2.md](./DESIGN-v2.md).
+> **Version 2 is a beta and is not released yet.** See [Beta status](#beta-status). It requires
+> PHP 8.4+. Upgrading from 1.1: see [UPGRADE.md](./UPGRADE.md). The design and every decision are in
+> [DESIGN-v2.md](https://github.com/ibnnajjaar/mib-global-pay/blob/main/DESIGN-v2.md).
 
 The rule this package is built around: **a payment is paid only when the gateway says so for the
 exact amount you expected.** The return URL and the webhook are triggers; `verifyCapture()` is the
 proof.
 
+## Beta status
+
+The planned first tag is `v2.0.0-beta.1`. It is not a finished 2.0.0. No authenticated sandbox flow
+has been run against the gateway, and MIB has not answered our open questions. Test your own flow
+against the test gateway before you trust it with live payments.
+
+This gateway behaviour is implemented but unverified:
+
+- **Unknown orders:** the exact response for an order the gateway does not have. The package maps
+  it to `NotFound`, which can lead to `PaymentFailed` and to an attempt being superseded. The rule
+  is under [Verify](#verify), and the format it assumes comes from the docs, which do not describe
+  this case.
+- **Webhook body:** the format of transaction notifications and of Payment Alerts. Notifications
+  are classified by body shape until MIB confirms this.
+- **Webhook headers:** whether `X-Notification-Attempt` starts at 1, whether `X-Notification-ID` is
+  always present, and which casing is sent.
+- **Identifiers:** which characters `order.id` and `order.reference` accept.
+- **Production host:** `Environment::Production` has no preset, so you must set the host yourself.
+- **Merchant profile:** whether `APPROVED_AUTO` and `PARTIALLY_APPROVED` occur, whether Update Session
+  works on a Hosted Checkout session (it ships as experimental), how long a session lasts, and which
+  operations, currencies and features are enabled.
+
+The full list is at the top of [DESIGN-v2.md](https://github.com/ibnnajjaar/mib-global-pay/blob/main/DESIGN-v2.md),
+with the questions for MIB in its §12.
+
 ## Contents
 
+- [Beta status](#beta-status)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Core usage (any PHP app)](#core-usage-any-php-app)
@@ -29,15 +56,47 @@ proof.
 
 - PHP 8.4 or 8.5
 - `guzzlehttp/guzzle` ^7.9 (default transport) or any PSR-18 client
-- Laravel 13 for the optional Laravel layer
+- Laravel 12 or 13 for the optional Laravel layer
+
+### Supported Laravel versions
+
+| Host | Does it install? | What you get |
+|---|---|---|
+| Laravel 12 or 13 | Yes | The core and the Laravel layer, auto-discovered |
+| Any other Laravel (11 or older, 14 or newer) | No, Composer refuses | Nothing is installed and the app is left as it was |
+| Any PHP app without `laravel/framework`, including one using `illuminate/*` packages of any version on their own | Yes | The core only; no Illuminate package is pulled in |
+
+The refusal comes from a `conflict` on `laravel/framework` in this package's `composer.json`:
+
+```text
+ibnnajjaar/mib-global-pay 2.0.0-beta.1 conflicts with laravel/framework <12.0 || >=14.0.
+```
+
+Laravel 12's security support ends on 2027-02-24, so a later major version of this package can drop it.
+
+The core has no framework dependency, but it cannot be installed on its own into an unsupported
+Laravel app, because Composer installs a package as a whole. To use the core from such an app, either
+upgrade the app to Laravel 12 or 13, or call the gateway from a separate non-Laravel project.
 
 ## Installation
 
 ```bash
-composer require ibnnajjaar/mib-global-pay:^2.0
+composer require ibnnajjaar/mib-global-pay:^2.0@beta --with-all-dependencies
 ```
 
+Use this same command for a Laravel 12 or 13 app and for a PHP app without a framework. `v2.0.0-beta.1` is
+not released yet, so Composer finds no matching version until it is tagged.
+
+- `@beta` is needed because Composer installs only stable versions by default. Plain `^2.0` does not
+  find a beta.
+- `--with-all-dependencies` is needed on Laravel 13. A fresh Laravel 13 app ships Guzzle 8 and this
+  package needs Guzzle 7, so Composer has to move Guzzle to 7.x. Without the flag it stops and reports
+  that Guzzle is fixed to 8.x. A fresh Laravel 12 app already has Guzzle 7, so the flag changes nothing
+  there.
+
 ## Core usage (any PHP app)
+
+On Laravel, the core is available on Laravel 12 and 13 only; see [Supported Laravel versions](#supported-laravel-versions).
 
 ### Configure
 
@@ -100,6 +159,17 @@ match ($result->status) {
 };
 ```
 
+`NotFound` means the gateway itself says it has no such order, and it counts as not paid. It needs a
+body in the gateway's error format (`result` `ERROR`, `error.cause` `INVALID_REQUEST`, no `error.field` or
+`error.validationType`), and then either HTTP 404 with any wording, or HTTP 400 whose explanation says
+the order is missing. Any other 400 or 404, such as an HTML page from a wrong host or a proxy, throws
+`GatewayException`, because it says nothing about the money. Its message says the response was not
+recognised as a gateway error and names the host, so check your host setting first.
+
+If MIB's real response turns out not to match, `verifyCapture()` throws for orders that were never paid
+and `AttemptGuard` throws too, so a payer with an abandoned attempt cannot start a new one. No money moves.
+Try an unknown order ID on the test gateway before going live, and report it if it throws.
+
 On the return URL, `HostedCheckoutReturn::fromQuery($_GET)->matchesSuccessIndicator($stored)` is a
 timing-safe hint for the payer-facing page; still call `verifyCapture()`.
 
@@ -132,7 +202,49 @@ $gateway->send(new SomeOperation(...));               // any Core\Contracts\Oper
 
 Persist each new transaction ID before sending: resending the identical request after a timeout is
 safe. A declined operation is a `TransactionResponse` with `Result::Failure`, not an exception.
-`(new ReversalHelper($gateway))->reverse(...)` voids, falling back to a refund.
+
+### Reversing a capture
+
+```php
+$outcome = (new ReversalHelper($gateway))->reverseWithDerivedIds($orderId, 'MY-REFERENCE');
+```
+
+It voids the latest approved payment or capture, and falls back to a refund of the refundable amount
+against that capture. The void and refund IDs are derived from the order and capture
+(`ReversalIds::derive()`, built on `TransactionId::derive()`), so calling again sends identical requests.
+Keep the reference the same too. To use your own IDs, call `reverse($orderId, $voidId, $refundId)` and
+persist them before sending.
+
+| `$outcome->method` | `$reversed` | What it means | What to do |
+|---|---|---|---|
+| `Void` | true | The capture was voided | Nothing |
+| `Refund` | true | The refund was approved | Nothing |
+| `Refund` | false | The refund definitely failed | A person decides. Calling again sends nothing |
+| `Unconfirmed` | false | The void or refund result is unknown, so no refund was sent | Call again later, with a limit, then escalate |
+| `Nothing` | false | No approved capture, or nothing left to refund | Nothing |
+
+- **Refund only when the void definitely failed.** That is a `FAILURE` or `ERROR` result, except for codes
+  that do not prove it, such as `TIMED_OUT` or `UNSPECIFIED_FAILURE` ("The gateway does not know the result
+  of the transaction ... Contact your acquirer").
+- **HTTP 400 on the void:** the void is read back by its ID and the order is re-read. The refund goes out
+  only if the void is absent or definitely failed and the order has not moved. Otherwise it is `Unconfirmed`.
+  If one of those reads fails, the exception is rethrown and no refund is sent.
+- **Any other 4xx, a 400 not in the gateway's error format, a 5xx or no response** is rethrown, and no
+  refund is sent. Call again. The same goes for a read of the void that gets one of these.
+- **Every call reads the order first.** A void or refund it already lists is reported, and nothing is sent:
+  approved means reversed, anything unsettled means `Unconfirmed`. A pending void or refund anywhere on the
+  order also gives `Unconfirmed`, because the refund amount comes from the order's totals.
+- **Partial refunds:** a refund under another ID counts as this reversal only if it targets this capture and
+  covers all of it. Otherwise the remainder is refunded.
+- **Retrying after a definite failure:** the docs say a failed operation needs a new ID, and an identical
+  request gets the first response. So a failed void is not resent; the next step is the refund. To retry a
+  failed refund, call `reverse()` with the outcome's void ID and `TransactionId::generate('refund')`.
+
+Calling `reverse()` yourself gives no retries or escalation. On `Unconfirmed`, call again later with a limit,
+and when that runs out, have a person ask the acquirer. Do not refund by other means until then.
+
+All of this follows the MIB documentation (API v100). None of it has been observed on the live gateway,
+including what a duplicate request returns and whether Retrieve Order lists a pending void.
 
 ## Laravel
 
@@ -149,7 +261,8 @@ MIB_WEBHOOK_SECRET=...            # from Merchant Administration (Webhook Notifi
 All keys: `config/mib-global-pay.php` (`php artisan vendor:publish --tag=mib-global-pay-config`).
 
 1. **Dedupe table:** `php artisan vendor:publish --tag=mib-global-pay-migrations && php artisan migrate`
-   (or `MIB_NOTIFICATION_STORE=cache` with a shared cache).
+   (or `MIB_NOTIFICATION_STORE=cache` with a shared cache, though the database store is the better choice: see the
+   listener contract in step 4).
 2. **Implement and bind** `Core\Attempts\PayableResolver`, with your models implementing `Payable`
    and `Attempt` (DESIGN-v2.md §6.7). The webhook answers 503 until the resolver is bound.
 3. **Webhook route:** auto-registered at `POST /mib/webhook` (`MIB_WEBHOOK_PATH`, `MIB_WEBHOOK_DOMAIN`).
@@ -159,15 +272,70 @@ All keys: `config/mib-global-pay.php` (`php artisan vendor:publish --tag=mib-glo
        Route::mibGlobalPayWebhook('payment-gateways/mib/webhook');
    });
    ```
-   The route can sit in a name-prefixed or domain group; the package remembers the route itself, so the webhook URL is
-   still found (for `newCheckoutRequest()` and the tests).
+   If the route sits in a group that checks CSRF tokens, such as `web`, add its path to your CSRF exception list in
+   `bootstrap/app.php`. Otherwise, on Laravel 13, every notification from the bank gets a 419.
+   ```php
+   ->withMiddleware(function (Middleware $middleware) {
+       $middleware->validateCsrfTokens(except: ['payment-gateways/mib/webhook']);
+   })
+   ```
+   The route can sit in a name-prefixed or domain group. The webhook URL is still found (for `newCheckoutRequest()` and
+   the tests), with or without `route:cache` or `artisan optimize`, and it is the same URL either way.
+   - With more than one route from the macro or auto-registration, the last one registered wins. Give each its own name
+     (a group's name prefix does that). `route:cache` refuses two routes with one name, so leaving auto-registration on
+     next to a macro route with no name prefix makes it fail.
+   - With `MIB_WEBHOOK_ENABLED=false` nothing is auto-registered, so the URL is null. A macro route stays registered, so
+     its URL is still returned, and it answers 404.
+   - After changing any of these settings or routes, run `route:cache` again, as for any other route change.
    It answers 200 (accepted or duplicate), 401 (bad secret), 400 (malformed), 503 (not configured).
    Processing runs on the queue (`MIB_WEBHOOK_CONNECTION`, `MIB_WEBHOOK_QUEUE`).
+
+   **Queue and retries.** Run a real queue worker. `ProcessNotification` sets its own retries, so the worker's
+   `--tries` and `--backoff` do not change them: 5 attempts, waiting 30 seconds, 2, 5 and 10 minutes (about 18 minutes in all).
+   - Gateway timeouts, HTTP 5xx, 401, 403, 408, 425 and 429, garbled responses and any other exception are retried.
+   - A malformed job, an order ID the package cannot send, and any other HTTP 4xx in the gateway's error format fail on
+     the first attempt. A 4xx not in that format, such as a 404 page from a wrong host, is retried like an outage, and
+     no `PaymentFailed` is dispatched for it.
+   - While retries remain, the notification has no outcome, and a redelivery gets `duplicate` without queueing a second job.
+     It becomes `Failed` only when the job fails for good. The job is then in your failed jobs and the notification
+     stays claimed, so redeliveries do not reprocess it: use `php artisan queue:retry`, which sets the final outcome.
+   - After that, `mib:reconcile` dispatches again for any attempt your `awaitingGateway()` still returns. It cannot reach
+     a refund or void event, or an attempt you no longer report as awaiting. For those, use `queue:retry`.
+   - On the `sync` queue there are no retries: a failure answers 503 and the bank redelivers.
+
+   **When a listener throws**, what happens next depends on the event:
+   - **Money events** (`PaymentCaptured`, `PaymentCapturedForUnpayableOrder`, `CaptureMismatch`, `PaymentReversed`,
+     `RefundProcessed`, `VoidProcessed`) go out at least once until one dispatch completes, then not again. A failed
+     dispatch records nothing, so the retry dispatches again. If the retries run out, the notification is `Failed`,
+     never `Processed`.
+   - **Advisory events** (`NotificationReceived`, `UnknownOrderNotification`, `PaymentPending`, `PaymentFailed`) go out
+     at most once per notification, even if a listener threw. The job carries on and can still end as `Processed`.
+     `PaymentPending` and `PaymentFailed` from the return URL or `mib:reconcile` have no notification, so those triggers
+     send them each time.
 4. **Listen to the events** (`IbnNajjaar\MIBGlobalPay\Laravel\Events`). They are dispatched inside
    `Payable::lock()`; the package never changes your models:
    `PaymentCaptured`, `PaymentCapturedForUnpayableOrder`, `CaptureMismatch`, `PaymentPending`,
    `PaymentFailed`, `PaymentReversed`, `UnknownOrderNotification`, `RefundProcessed`, `VoidProcessed`,
-   `NotificationReceived`.
+   `NotificationReceived`. With double-capture auto-reversal on, also `ReversalUnconfirmed` and `ReversalFailed`.
+   `RefundProcessed` and `VoidProcessed` are the exceptions: they go out with no lock, because the order may be unknown.
+
+   **Listener contract.** A completed dispatch is recorded only after `Payable::lock()` has returned, so a money event
+   can repeat: after a crash before the record, when a second worker enters the lock before the record (`PaymentCaptured`
+   is then stopped by your settlement, the others are not), and for refunds and voids when two workers overlap. So:
+   - **Be idempotent on `$event->deliveryKey`**, for example with a unique column. Every money event has it: 64 hex
+     characters, the same for one order ID, transaction ID and outcome, whichever trigger sent it.
+     - If an approved transaction has no ID, a `CaptureMismatch` or `PaymentReversed` is keyed on the status and totals the
+       gateway reports, and a `RefundProcessed` or `VoidProcessed` on its notification ID, so a redelivery under a new
+       notification ID would count as a new event.
+   - **Send emails and other non-database effects from a `ShouldQueueAfterCommit` listener or `DB::afterCommit`.** A
+     retry calls your listeners again, and a rollback does not undo an email.
+   - **Hold `Payable::lock()` in a `DB::transaction`, and prefer the database store.** The cache cannot roll back with your
+     transaction: the package holds a cache delivery record until your transaction commits, but an eviction or
+     `cache:clear` loses it, and advisory claims are not held back at all. Without a rollback, a settlement one listener
+     saved outlives a later listener that threw, so the retry calls the first one again. If the process dies mid-dispatch
+     instead, that settlement stops `PaymentCaptured` for good and later listeners are not called, so save it last.
+   - **Keep returning an attempt from `awaitingGateway()` until your listener has succeeded**, or `mib:reconcile` cannot
+     dispatch for it.
 5. **Checkout:**
    ```php
    $request = MibGlobalPay::newCheckoutRequest(MibGlobalPay::attemptOrderId($ref, $n), $amount, 'My Shop', $returnUrl)
@@ -182,9 +350,22 @@ All keys: `config/mib-global-pay.php` (`php artisan vendor:publish --tag=mib-glo
    attempt is still unpaid, it returns it as `reusableAttempt`. Otherwise it allows a new attempt and lists the old ones to mark
    `Superseded`. Your `Payable::lock()` must be re-entrant (nested `DB::transaction` is).
 6. **Return URL:** `app(PaymentOutcome::class)->resolveFromReturn($orderId, $request->query())`.
-7. **Schedule** `mib:reconcile` (every few minutes) and `mib:prune-notifications` (daily).
+7. **Schedule** `mib:reconcile` (every few minutes) and `mib:prune-notifications` (daily). Pruning keeps money-event
+   delivery records, about one small row per event, because `mib:reconcile`, `AttemptGuard` and the return URL can reach an
+   attempt at any time. With the cache store they have no expiry either.
 
-Double-capture auto-reversal is available but off: `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=true`.
+Double-capture auto-reversal is available but off: `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=true`. It queues the
+`ReverseCapture` job, which uses `reverseWithDerivedIds()`, so a retry or a second job for the same capture
+sends identical requests. Retries come from the job, not from the worker's settings:
+
+- `Unconfirmed` and exceptions are retried, up to 6 attempts over about 45 minutes (1, 5, 10, 15 and 15 min).
+- When they run out, it logs an error and dispatches `ReversalUnconfirmed` (`gatewayOrderId`, `ids`,
+  `transaction`, `error`). The money may or may not have gone back, so listen for this and have a person ask the
+  acquirer. After an exception, `ids` is null and `error` is set; `ReversalIds::derive()` gives the IDs from the
+  order and capture. That job is also in your failed jobs.
+- A refund that definitely failed is not retried. It logs an error and dispatches `ReversalFailed`
+  (`gatewayOrderId`, `ids`, `refund`): the money was not returned.
+- On the `sync` queue there are no retries, so `Unconfirmed` escalates at once.
 
 ## Testing your integration
 
@@ -219,12 +400,14 @@ it('pays the invoice when MIB reports the capture', function () {
 ```
 
 - **Defaults for anything not stubbed:** Initiate Checkout returns a new session, an unknown order
-  is the gateway's 404 (`verifyCapture()` gives `NotFound`), Capture/Refund/Void/Update
+  is a 404 in the gateway's error format (`verifyCapture()` gives `NotFound`), Capture/Refund/Void/Update
   Authorization are approved, Check Gateway is `OPERATING`. Call `->strict()` to make any
   unstubbed call throw a `LogicException` instead.
 - **Stubs:** `checkoutSession(?$orderId, sessionId:, successIndicator:)`;
   `order($orderId, ...$payloads)` (returned in sequence, then the last repeats, e.g.
-  `OrderFactory::pending($a), OrderFactory::captured($a)`); `respondWith(Capture::class, $payload|$exception|fn ($op) => ...)`.
+  `OrderFactory::pending($a), OrderFactory::captured($a)`); `respondWith(Capture::class, $payload|$exception|fn ($op) => ...)`. A stubbed `GatewayException` counts
+  as a gateway error only if you pass the JSON as its raw body (fourth argument). Without that it behaves like a
+  response from a wrong host: `new GatewayException('HTTP 404', 404)` makes `verifyCapture()` throw.
 - **Order payloads:** `OrderFactory::captured`, `authorizedOnly`, `declined`, `pending`,
   `partiallyRefunded`, `refunded`, `voided`, `withoutCapturedTotal`.
 - **Notifications:** `NotificationFactory::paymentCaptured`, `paymentDeclined`, `refund`, `void`,
@@ -268,7 +451,7 @@ composer lint       # Pint
 composer refactor-check  # Rector, dry run (`composer refactor` applies the changes)
 ```
 
-[WORKFLOW.md](./WORKFLOW.md) shows the payment flow.
+[WORKFLOW.md](https://github.com/ibnnajjaar/mib-global-pay/blob/main/WORKFLOW.md) shows the payment flow.
 
 ## License
 

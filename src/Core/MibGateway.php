@@ -149,7 +149,7 @@ final readonly class MibGateway implements Gateway
             }
 
             if ($status < 200 || $status >= 300) {
-                throw $this->gatewayException($response, $rawBody, $decoded);
+                throw $this->gatewayException($request, $response, $rawBody, $decoded);
             }
 
             if (! is_array($decoded)) {
@@ -291,14 +291,26 @@ final readonly class MibGateway implements Gateway
         return $request;
     }
 
-    private function gatewayException(ResponseInterface $response, string $rawBody, mixed $decoded): GatewayException
+    private function gatewayException(RequestInterface $request, ResponseInterface $response, string $rawBody, mixed $decoded): GatewayException
     {
+        $status = $response->getStatusCode();
         $error = is_array($decoded) && isset($decoded['error']) && is_array($decoded['error']) ? $decoded['error'] : [];
         /** @var array<string, mixed> $error */
         $explanation = $error['explanation'] ?? $error['cause'] ?? null;
-        $message = is_string($explanation) && $explanation !== '' ? $explanation : 'HTTP ' . $response->getStatusCode();
+        $message = is_string($explanation) && $explanation !== '' ? $explanation : 'HTTP ' . $status;
+        $exception = new GatewayException($message, $status, $error, $rawBody);
 
-        return new GatewayException($message, $response->getStatusCode(), $error, $rawBody);
+        if (! in_array($status, [400, 404], true) || $exception->isGatewayError()) {
+            return $exception;
+        }
+
+        // These two statuses can mean "no such order", so say why this one does not. Only the host
+        // is named: the message reaches logs and consoles, and never carries the body or credentials.
+        return new GatewayException(sprintf(
+            'HTTP %d from %s: the response was not recognised as a gateway error, so it says nothing about the order. Check the configured gateway host, and that no proxy is answering in its place.',
+            $status,
+            $request->getUri()->getHost(),
+        ), $status, $error, $rawBody);
     }
 
     /**

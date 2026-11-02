@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace IbnNajjaar\MIBGlobalPay\Laravel;
 
-use Illuminate\Routing\Router;
 use IbnNajjaar\MIBGlobalPay\Core\Money\Money;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Routing\UrlGenerator;
@@ -37,7 +36,6 @@ final readonly class MibGlobalPay
         private Gateway $gateway,
         private Settings $settings,
         private OrderIdGenerator $orderIds,
-        private Router $router,
         private UrlGenerator $urls,
         private WebhookRoute $webhookRoute,
         private Container $container,
@@ -85,17 +83,14 @@ final readonly class MibGlobalPay
 
     /**
      * The absolute URL of the webhook route, if it is registered. Works whatever name prefix or
-     * domain a host group gives the route registered with Route::mibGlobalPayWebhook().
+     * domain a host group gives the route registered with Route::mibGlobalPayWebhook(), with or
+     * without route:cache. With several such routes, the last one registered wins.
      */
     public function webhookUrl(): ?string
     {
         $route = $this->webhookRoute->route();
 
-        if ($route !== null) {
-            return $this->urls->toRoute($route, [], true);
-        }
-
-        return $this->router->has(self::WEBHOOK_ROUTE_NAME) ? $this->urls->route(self::WEBHOOK_ROUTE_NAME) : null;
+        return $route === null ? null : $this->urls->toRoute($route, [], true);
     }
 
     /** created_at + checkout timeout + grace: the attempts.expires_at value. */

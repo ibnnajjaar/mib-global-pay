@@ -64,6 +64,24 @@ final class GatewayHarness
         return new Response($status, ['Content-Type' => 'application/json'], (string) file_get_contents(__DIR__ . '/../Fixtures/v2/' . $name));
     }
 
+    /**
+     * The documented error format.
+     *
+     * @param array<string, mixed> $details extra fields of the "error" object
+     *
+     * @return array<string, mixed>
+     */
+    public static function errorBody(array $details = [], string $cause = 'INVALID_REQUEST'): array
+    {
+        return ['result' => 'ERROR', 'error' => ['cause' => $cause] + $details];
+    }
+
+    /** What the package assumes an unknown order or transaction returns. Unverified with MIB. */
+    public static function notFound(): Response
+    {
+        return self::json(404, self::errorBody());
+    }
+
     public function request(int $index = 0): RequestInterface
     {
         return $this->history[$index]['request'];

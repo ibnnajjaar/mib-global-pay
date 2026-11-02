@@ -86,21 +86,55 @@ final readonly class CaptureVerifier
     }
 
     /**
-     * Whether a Retrieve Order failure means "no such order".
+     * Whether a Retrieve Order failure means "no such order". NotFound counts as unpaid and can
+     * allow a new attempt, so when unsure this says no and the exception reaches the caller.
      *
-     * Unverified against the MIB sandbox: treats HTTP 404, and HTTP 400 whose explanation
-     * mentions that the order was not found, as NotFound.
+     * Unverified against the MIB sandbox, and the docs do not describe this case (DESIGN-v2.md §4.2).
+     * It needs the documented error format with cause INVALID_REQUEST and no field-level validation
+     * details, and then either HTTP 404 with any wording, or HTTP 400 whose explanation says the
+     * order is what is missing. The docs say the explanation's format cannot be guaranteed, so a
+     * 404 does not depend on it. They describe a 400 as a malformed request, so a 400 does.
      */
     public static function isOrderNotFound(GatewayException $e): bool
     {
-        if ($e->httpStatus() === 404) {
-            return true;
+        return self::isNotFound($e, 'order');
+    }
+
+    /**
+     * The same rule for a Retrieve Transaction failure, with the 400 text naming the transaction.
+     * A 404 cannot tell an unknown transaction from an unknown order, and either way the
+     * transaction is absent. Equally unverified.
+     */
+    public static function isTransactionNotFound(GatewayException $e): bool
+    {
+        return self::isNotFound($e, 'transaction');
+    }
+
+    private static function isNotFound(GatewayException $e, string $subject): bool
+    {
+        $error = $e->error();
+
+        if (! $e->isGatewayError() || $e->cause() !== 'INVALID_REQUEST' || isset($error['field']) || isset($error['validationType'])) {
+            return false;
         }
 
-        $text = strtolower(($e->explanation() ?? '') . ' ' . ($e->cause() ?? ''));
+        return $e->httpStatus() === 404
+            || ($e->httpStatus() === 400 && self::saysMissing(trim($e->explanation() ?? ''), $subject));
+    }
 
-        return $e->httpStatus() === 400
-            && (str_contains($text, 'not found') || str_contains($text, 'unable to find') || str_contains($text, 'does not exist'));
+    /**
+     * "Unable to find order X", "Order not found", "The order with id X-1 was not found", "Order X-1
+     * does not exist". The subject must be what is missing, so "Merchant not found for order X" and
+     * "Order reference not found" do not count, nor does a value echoed back in a validation message.
+     */
+    private static function saysMissing(string $explanation, string $subject): bool
+    {
+        $end = '(?![\w-]|\.\w)';
+
+        return preg_match(
+            "/^(?:unable to find (?:the |an? )?{$subject}{$end}|(?:the )?{$subject}(?: (?:with )?id)?(?: \S*\d\S*)? (?:was )?(?:not found|does not exist)\b)/i",
+            $explanation,
+        ) === 1;
     }
 
     private function isPending(OrderResponse $order): bool

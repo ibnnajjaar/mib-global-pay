@@ -31,8 +31,9 @@ use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationStatus;
  *       attemptsToSupersede, and a new attempt is allowed.
  *
  * Failed and Superseded attempts need no check. Cost: one Retrieve Order per attempt that may
- * still be paid (usually zero or one). If the gateway cannot be reached the guard throws, so no
- * new attempt starts while an older one might be paid.
+ * still be paid (usually zero or one). If the gateway cannot be reached, or a response is not
+ * recognised as coming from it (a 404 page from a wrong host, say), the guard throws, so no new
+ * attempt starts while an older one might be paid.
  */
 final readonly class AttemptGuard
 {

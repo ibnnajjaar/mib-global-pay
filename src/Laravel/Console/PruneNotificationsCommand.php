@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace IbnNajjaar\MIBGlobalPay\Laravel\Console;
 
 use Illuminate\Console\Command;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Database\ConnectionInterface;
 use IbnNajjaar\MIBGlobalPay\Laravel\Support\Settings;
 use IbnNajjaar\MIBGlobalPay\Laravel\Stores\DatabaseNotificationStore;
@@ -12,6 +13,11 @@ use IbnNajjaar\MIBGlobalPay\Laravel\Stores\DatabaseNotificationStore;
 /**
  * Deletes old rows from mib_global_pay_notifications (database store only). Keep more than
  * the gateway's 3-day redelivery window.
+ *
+ * Money-event delivery records stay: reconcile, AttemptGuard and the return URL can reach an attempt
+ * at any time, and without its record the event would go out again. That is one small row per money
+ * event. Rows it deletes are notification IDs and the per-notification claims of advisory events
+ * (empty order ID).
  */
 final class PruneNotificationsCommand extends Command
 {
@@ -37,6 +43,7 @@ final class PruneNotificationsCommand extends Command
 
         $deleted = $db->table(DatabaseNotificationStore::TABLE)
             ->where('updated_at', '<', now()->subDays($days))
+            ->where(fn (Builder $query): Builder => $query->whereNotNull('notification_id')->orWhere('order_id', ''))
             ->delete();
 
         $this->info("Deleted {$deleted} record(s).");

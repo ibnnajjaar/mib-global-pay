@@ -13,7 +13,8 @@ use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationResult;
 /**
  * Captured money was fully refunded or voided.
  *
- * Dispatched inside Payable::lock(). The package never changes the payable itself.
+ * Dispatched inside Payable::lock(). The package never changes the payable itself. At least once:
+ * be idempotent on $deliveryKey (64 hex characters).
  */
 final readonly class PaymentReversed
 {
@@ -24,6 +25,7 @@ final readonly class PaymentReversed
         public VerificationResult $verification,
         public Money $reversedAmount,
         public Source $source,
+        public string $deliveryKey,
         public ?Notification $notification = null,
     ) {
     }

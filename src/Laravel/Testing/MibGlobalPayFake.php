@@ -49,9 +49,13 @@ use IbnNajjaar\MIBGlobalPay\Core\Operations\Gateway\PaymentOptionsInquiry;
  * Requests are still validated against the configuration, exactly like the real gateway client.
  *
  * Unstubbed calls get gateway-like defaults: Initiate Checkout returns a new session, an unknown
- * order is the gateway's 404 (verifyCapture() gives NotFound), Capture/Refund/Void/Update
- * Authorization are approved, Check Gateway is OPERATING. With strict(), any unstubbed call
- * throws a LogicException instead.
+ * order is a 404 in the documented error format (verifyCapture() gives NotFound; that this is what
+ * MIB sends is unverified), Capture/Refund/Void/Update Authorization are approved, Check Gateway is
+ * OPERATING. With strict(), any unstubbed call throws a LogicException instead.
+ *
+ * A GatewayException stubbed with respondWith() follows the same rules as a real one: only its raw
+ * body makes it a gateway error, so pass the JSON as well to stub one, and leave it out or pass
+ * HTML to stub a response from a wrong host.
  */
 final class MibGlobalPayFake implements Gateway
 {
@@ -379,7 +383,7 @@ final class MibGlobalPayFake implements Gateway
 
         return match (true) {
             $operation instanceof InitiateCheckout => $this->checkoutPayload($operation->request, self::randomSessionId(), bin2hex(random_bytes(8))),
-            $operation instanceof RetrieveOrder => throw new GatewayException('Order not found', 404, ['cause' => 'INVALID_REQUEST', 'explanation' => 'Unable to find order ' . $operation->orderId]),
+            $operation instanceof RetrieveOrder => throw self::notFound('Unable to find order ' . $operation->orderId),
             $operation instanceof RetrieveTransaction => $this->transactionFromOrder($operation),
             $operation instanceof TransactionOperation => $this->approvedTransaction($operation),
             $operation instanceof RetrieveSession, $operation instanceof UpdateSession => $this->sessionPayload($operation->sessionId),
@@ -445,7 +449,15 @@ final class MibGlobalPayFake implements Gateway
             }
         }
 
-        throw new GatewayException('Transaction not found', 404, ['cause' => 'INVALID_REQUEST', 'explanation' => 'Unable to find transaction ' . $operation->transactionId]);
+        throw self::notFound('Unable to find transaction ' . $operation->transactionId);
+    }
+
+    /** The 404 MibGateway would throw for this body, raw body included. */
+    private static function notFound(string $explanation): GatewayException
+    {
+        $error = ['cause' => 'INVALID_REQUEST', 'explanation' => $explanation];
+
+        return new GatewayException($explanation, 404, $error, json_encode(['result' => 'ERROR', 'error' => $error], JSON_THROW_ON_ERROR));
     }
 
     /**

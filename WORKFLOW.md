@@ -60,7 +60,7 @@ flowchart TD
     W7 -->|Queueing failed| W8[Release the claim, 503: the bank redelivers]
     W7 -->|Queued| W9[200 accepted]
     W7 -.->|Queue worker| W10{Notification type}
-    W10 -->|Refund or void| W11["RefundProcessed or VoidProcessed"]
+    W10 -->|Refund or void| W11["RefundProcessed or VoidProcessed, then record the delivery"]
     W11 -->|Known attempt| V
     W10 -->|Payment or capture| W12{Known attempt?}
     W12 -->|No| W13[UnknownOrderNotification]
@@ -70,6 +70,8 @@ flowchart TD
     X --> V
     V["verifyCapture() against Payable::expectedAmount(), outside the lock"] --> L
     L["Take Payable::lock(), re-read the payable"] --> D[Dispatch at most one outcome event]
+    D -->|Listener threw| F[Record nothing: a job retry or mib:reconcile dispatches again]
+    D -->|Lock returned| Y[Record the delivery of a money event]
 ```
 
 The webhook answers within the bank's 2-second window because it only verifies, claims and queues. The bank
@@ -89,14 +91,21 @@ redelivers up to 20 times over 3 days. Schedule `mib:reconcile`, because it cove
 | `NotCaptured`, `NotFound` | Triggering transaction failed, or attempt expired | `PaymentFailed` |
 | `NotCaptured`, `NotFound` | Attempt still live | None |
 
-Each capture, mismatch or reversal produces its event once per order ID, transaction ID and outcome, however
-many triggers arrive. `PaymentPending` and `PaymentFailed` have no such dedupe, so make their listeners
-idempotent.
+Each capture, mismatch or reversal event, and `RefundProcessed` and `VoidProcessed`, is a money event. It goes out
+at least once per order ID, transaction ID and outcome until one dispatch completes, then not again, however many
+triggers arrive. A listener failure records nothing, so a job retry or `mib:reconcile` dispatches again. A crash before
+the record, or a second worker arriving before it, can repeat the event, so listeners must be idempotent on
+`deliveryKey`. `PaymentCaptured` is also stopped by the settlement your listener saves.
+
+`PaymentPending` and `PaymentFailed` are advisory: at most once per notification, and each time from a trigger that has
+no notification, so make their listeners idempotent too.
 
 With `MIB_AUTO_REVERSE_DOUBLE_CAPTURE` on (off by default), a `DoubleCapture` also queues a reversal: a void,
 falling back to a refund.
 
 ## Still unconfirmed by MIB
 
-The `NotFound` mapping, the webhook body and header details and the production host are implemented but not yet
-confirmed against the gateway. See the top of [DESIGN-v2.md](./DESIGN-v2.md).
+The `NotFound` rule, the webhook body and header details and the production host are implemented but not yet
+confirmed against the gateway. `NotFound` needs a body in the documented error format, so a 404 page from a wrong host
+throws instead of reading as unpaid. If MIB's real response does not match, unpaid attempts throw too, and a payer with
+an expired attempt cannot start a new one until the rule is corrected. See the top of [DESIGN-v2.md](./DESIGN-v2.md).

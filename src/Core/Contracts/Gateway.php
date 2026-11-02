@@ -42,7 +42,8 @@ interface Gateway
 
     /**
      * Re-read the order from the gateway and check it is captured for exactly $expected,
-     * using the configured ApprovalPolicy. An unknown order gives NotFound, not an exception.
+     * using the configured ApprovalPolicy. An unknown order gives NotFound, not an exception. A 400
+     * or 404 that is not a recognised gateway error throws, so a wrong host never reads as unpaid.
      *
      * @throws InvalidRequest
      * @throws GatewayException  for errors other than "order not found"

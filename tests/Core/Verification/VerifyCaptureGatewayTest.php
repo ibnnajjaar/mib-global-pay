@@ -30,9 +30,9 @@ it('maps "order not found" responses to NotFound', function (int $status, array 
 
     expect($h->gateway->verifyCapture('MISSING', Money::of('1', Currency::Mvr))->status)->toBe(VerificationStatus::NotFound);
 })->with([
-    '404' => [404, []],
-    '400 unable to find' => [400, ['error' => ['cause' => 'INVALID_REQUEST', 'explanation' => 'Unable to find order MISSING']]],
-    '400 not found' => [400, ['error' => ['cause' => 'INVALID_REQUEST', 'explanation' => 'Order not found']]],
+    '404' => [404, GatewayHarness::errorBody()],
+    '400 unable to find' => [400, GatewayHarness::errorBody(['explanation' => 'Unable to find order MISSING'])],
+    '400 not found' => [400, GatewayHarness::errorBody(['explanation' => 'Order not found'])],
 ]);
 
 it('rethrows other gateway errors', function () {

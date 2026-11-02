@@ -36,12 +36,26 @@ use IbnNajjaar\MIBGlobalPay\Laravel\Events\PaymentCapturedForUnpayableOrder;
  *
  * For each attempt: verifyCapture() against the payable's frozen amount (outside the lock,
  * since it calls the gateway), then inside Payable::lock() re-read the payable and dispatch at
- * most one outcome event. Business-level dedupe (order ID + transaction ID + outcome) means a
- * capture produces its event once, however many triggers arrive. The package never marks
- * anything paid: listeners do.
+ * most one outcome event. The package never marks anything paid: listeners do.
+ *
+ * Money events (PaymentCaptured, PaymentCapturedForUnpayableOrder, CaptureMismatch, PaymentReversed,
+ * RefundProcessed, VoidProcessed) go out at least once until one dispatch completes, then not again:
+ * check for a delivery record, dispatch, and record only once Payable::lock() has returned. After a
+ * throwable nothing is recorded, so a retry or mib:reconcile dispatches again. A crash before the
+ * record, or a second worker entering the lock before it, repeats the event, so listeners must be
+ * idempotent on deliveryKey. PaymentCaptured is also stopped by the payable's settlement, unless a
+ * listener threw during an earlier dispatch.
+ *
+ * Advisory events (NotificationReceived, UnknownOrderNotification, PaymentPending, PaymentFailed) go
+ * out at most once per notification, claimed before dispatching. A redelivery never reaches the job
+ * (the controller answers duplicate), so only job retries are affected. Triggers without a
+ * notification keep sending PaymentPending and PaymentFailed each time.
  */
 final readonly class OutcomeProcessor
 {
+    /** Records that a listener threw during PaymentCaptured, for the settlement check in decide(). */
+    private const string CAPTURE_INTERRUPTED = 'payment_captured_interrupted';
+
     /** @var \Closure(): \DateTimeImmutable */
     private \Closure $clock;
 
@@ -60,7 +74,9 @@ final readonly class OutcomeProcessor
 
     public function handleNotification(Notification $notification): NotificationOutcome
     {
-        $this->events->dispatch(new NotificationReceived($notification));
+        if ($this->claimForNotification($notification, 'notification_received')) {
+            $this->events->dispatch(new NotificationReceived($notification));
+        }
 
         if (! $notification instanceof TransactionNotification) {
             return NotificationOutcome::Ignored;
@@ -83,7 +99,9 @@ final readonly class OutcomeProcessor
         }
 
         if ($resolved === null) {
-            $this->events->dispatch(new UnknownOrderNotification($notification->orderId, $notification));
+            if ($this->claimForNotification($notification, 'unknown_order')) {
+                $this->events->dispatch(new UnknownOrderNotification($notification->orderId, $notification));
+            }
 
             return NotificationOutcome::Processed;
         }
@@ -112,10 +130,38 @@ final readonly class OutcomeProcessor
         $payable = $resolved->payable;
         $attempt = $resolved->attempt;
 
-        return $payable->lock(fn (): OutcomeResult => $this->decide($payable, $attempt, $verification, $source, $notification));
+        $claimed = null;
+        $dispatching = null;
+
+        try {
+            $result = $payable->lock(function () use ($payable, $attempt, $verification, $source, $notification, &$claimed, &$dispatching): OutcomeResult {
+                return $this->decide($payable, $attempt, $verification, $source, $notification, $claimed, $dispatching);
+            });
+        } catch (\Throwable $e) {
+            // A transactional lock has just rolled the claim back along with the failed listener.
+            if ($notification !== null && $claimed !== null) {
+                $this->claimForNotification($notification, $claimed);
+            }
+
+            if ($dispatching !== null && $dispatching[2] === 'payment_captured') {
+                $this->store->claimTransaction($dispatching[0], $dispatching[1], self::CAPTURE_INTERRUPTED);
+            }
+
+            throw $e;
+        }
+
+        if ($dispatching !== null) {
+            $this->store->markDelivered(...$dispatching);
+        }
+
+        return $result;
     }
 
-    private function decide(Payable $payable, Attempt $attempt, VerificationResult $v, Source $source, ?TransactionNotification $n): OutcomeResult
+    /**
+     * @param array{string, string, string}|null $dispatching set by once(), for processVerified() to record after the lock
+     */
+
+    private function decide(Payable $payable, Attempt $attempt, VerificationResult $v, Source $source, ?TransactionNotification $n, ?string &$claimed, ?array &$dispatching): OutcomeResult
     {
         $orderId = $attempt->gatewayOrderId();
         $transactionId = $v->transactionId();
@@ -127,40 +173,44 @@ final readonly class OutcomeProcessor
 
                 if ($settlement !== null) {
                     if ($settlement->isSameCapture($orderId, $transactionId)) {
-                        return new OutcomeResult($v, null, duplicate: true);
+                        // Normally the capture is done. But a lock with no rollback keeps a settlement
+                        // saved by one listener when a later one threw, and that dispatch must go again.
+                        return $this->store->wasDelivered($orderId, $transactionId, self::CAPTURE_INTERRUPTED)
+                            ? $this->once($v, 'payment_captured', fn (string $key): PaymentCaptured => new PaymentCaptured($orderId, $payable, $attempt, $v, $transactionId, $source, $key, $n), $dispatching)
+                            : new OutcomeResult($v, null, duplicate: true);
                     }
 
-                    return $this->once($v, 'double_capture', new CaptureMismatch($orderId, $payable, $attempt, $v, MismatchReason::DoubleCapture, $settlement, $transactionId, $source, $n));
+                    return $this->once($v, 'double_capture', fn (string $key): CaptureMismatch => new CaptureMismatch($orderId, $payable, $attempt, $v, MismatchReason::DoubleCapture, $settlement, $transactionId, $source, $key, $n), $dispatching);
                 }
 
                 $state = $payable->payableState();
 
                 if ($state->isPayable()) {
-                    return $this->once($v, 'payment_captured', new PaymentCaptured($orderId, $payable, $attempt, $v, $transactionId, $source, $n));
+                    return $this->once($v, 'payment_captured', fn (string $key): PaymentCaptured => new PaymentCaptured($orderId, $payable, $attempt, $v, $transactionId, $source, $key, $n), $dispatching);
                 }
 
                 if ($state === PayableState::Paid) {
                     // Paid without a recorded settlement: treat as a double capture, never as a new payment.
-                    return $this->once($v, 'double_capture', new CaptureMismatch($orderId, $payable, $attempt, $v, MismatchReason::DoubleCapture, null, $transactionId, $source, $n));
+                    return $this->once($v, 'double_capture', fn (string $key): CaptureMismatch => new CaptureMismatch($orderId, $payable, $attempt, $v, MismatchReason::DoubleCapture, null, $transactionId, $source, $key, $n), $dispatching);
                 }
 
-                return $this->once($v, 'captured_for_unpayable', new PaymentCapturedForUnpayableOrder($orderId, $payable, $attempt, $v, $transactionId, $state, $source, $n));
+                return $this->once($v, 'captured_for_unpayable', fn (string $key): PaymentCapturedForUnpayableOrder => new PaymentCapturedForUnpayableOrder($orderId, $payable, $attempt, $v, $transactionId, $state, $source, $key, $n), $dispatching);
 
             case VerificationStatus::AmountMismatch:
             case VerificationStatus::CurrencyMismatch:
                 $reason = $v->status === VerificationStatus::AmountMismatch ? MismatchReason::AmountMismatch : MismatchReason::CurrencyMismatch;
 
-                return $this->once($v, $reason->value, new CaptureMismatch($orderId, $payable, $attempt, $v, $reason, $payable->settledBy(), $transactionId, $source, $n));
+                return $this->once($v, $reason->value, fn (string $key): CaptureMismatch => new CaptureMismatch($orderId, $payable, $attempt, $v, $reason, $payable->settledBy(), $transactionId, $source, $key, $n), $dispatching);
 
             case VerificationStatus::Pending:
-                return $this->dispatch($v, new PaymentPending($orderId, $payable, $attempt, $v, $source, $n));
+                return $this->oncePerNotification($v, 'payment_pending', new PaymentPending($orderId, $payable, $attempt, $v, $source, $n), $n, $claimed);
 
             case VerificationStatus::Reversed:
                 $reversed = $v->refunded !== null && $v->refunded->isPositive() ? $v->refunded : $v->captured;
 
                 return $reversed === null
                     ? new OutcomeResult($v, null)
-                    : $this->once($v, 'payment_reversed', new PaymentReversed($orderId, $payable, $attempt, $v, $reversed, $source, $n));
+                    : $this->once($v, 'payment_reversed', fn (string $key): PaymentReversed => new PaymentReversed($orderId, $payable, $attempt, $v, $reversed, $source, $key, $n), $dispatching);
 
             case VerificationStatus::NotCaptured:
             case VerificationStatus::NotFound:
@@ -173,19 +223,66 @@ final readonly class OutcomeProcessor
                     return new OutcomeResult($v, null);
                 }
 
-                return $this->dispatch($v, new PaymentFailed($orderId, $payable, $attempt, $v, $n?->transaction->gatewayCode, $source, $n));
+                return $this->oncePerNotification($v, 'payment_failed', new PaymentFailed($orderId, $payable, $attempt, $v, $n?->transaction->gatewayCode, $source, $n), $n, $claimed);
         }
     }
 
-    private function once(VerificationResult $v, string $outcome, object $event): OutcomeResult
+    /**
+     * @param \Closure(string): object           $event     builds the event from its delivery key
+     * @param array{string, string, string}|null $dispatching what is going out, for processVerified()
+     */
+    private function once(VerificationResult $v, string $outcome, \Closure $event, ?array &$dispatching): OutcomeResult
     {
-        $transactionId = $v->transactionId();
+        $transactionId = $v->transactionId() ?? self::idWithoutTransaction($v);
 
-        if ($transactionId !== null && ! $this->store->claimTransaction($v->orderId, $transactionId, $outcome)) {
+        if ($this->store->wasDelivered($v->orderId, $transactionId, $outcome)) {
             return new OutcomeResult($v, null, duplicate: true);
         }
 
+        $dispatching = [$v->orderId, $transactionId, $outcome];
+
+        return $this->dispatch($v, $event(self::deliveryKey($v->orderId, $transactionId, $outcome)));
+    }
+
+    /**
+     * Stands in for the transaction ID of a verification with no approved transaction (a mismatch or
+     * reversal seen only in the order totals). What the gateway reports is the same from every trigger,
+     * including ones with no notification, and a new total is a new event. Fits the store's 40 characters.
+     */
+    private static function idWithoutTransaction(VerificationResult $v): string
+    {
+        return sha1(json_encode([$v->status->value, (string) $v->captured, (string) $v->refunded], JSON_THROW_ON_ERROR));
+    }
+
+    /** 64 hex characters, so it fits a host's unique column and order IDs can hold any character. */
+    private static function deliveryKey(string $orderId, string $transactionId, string $outcome): string
+    {
+        return hash('sha256', json_encode([$orderId, $transactionId, $outcome], JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * @param string|null $claimed set to $outcome once claimed, so processVerified() can restore the claim
+     */
+    private function oncePerNotification(VerificationResult $v, string $outcome, object $event, ?TransactionNotification $n, ?string &$claimed): OutcomeResult
+    {
+        if ($n !== null) {
+            if (! $this->claimForNotification($n, $outcome)) {
+                return new OutcomeResult($v, null, duplicate: true);
+            }
+
+            $claimed = $outcome;
+        }
+
         return $this->dispatch($v, $event);
+    }
+
+    /**
+     * False if this notification already sent $outcome. The empty order ID keeps these claims apart
+     * from real transactions, and the hash fits the store's 40-character transaction ID.
+     */
+    private function claimForNotification(Notification $n, string $outcome): bool
+    {
+        return $this->store->claimTransaction('', sha1($n->id()), $outcome);
     }
 
     private function dispatch(VerificationResult $v, object $event): OutcomeResult
@@ -195,17 +292,26 @@ final readonly class OutcomeProcessor
         return new OutcomeResult($v, $event);
     }
 
+    /**
+     * No lock here: $resolved can be null, so these listeners run outside Payable::lock(). A refund or
+     * void with no transaction ID is told apart by its notification, since two partial refunds can be
+     * identical in every other way.
+     */
     private function dispatchLifecycle(TransactionNotification $n, ?ResolvedAttempt $resolved): void
     {
-        $transactionId = $n->transactionId();
-        $key = $n->isRefund() ? 'refund_processed' : 'void_processed';
+        $transactionId = $n->transactionId() ?? sha1($n->id());
+        $outcome = $n->isRefund() ? 'refund_processed' : 'void_processed';
 
-        if ($transactionId !== null && ! $this->store->claimTransaction($n->orderId, $transactionId, $key)) {
+        if ($this->store->wasDelivered($n->orderId, $transactionId, $outcome)) {
             return;
         }
 
+        $key = self::deliveryKey($n->orderId, $transactionId, $outcome);
+
         $this->events->dispatch($n->isRefund()
-            ? new RefundProcessed($n->orderId, $resolved, $n->transaction, Source::Webhook, $n)
-            : new VoidProcessed($n->orderId, $resolved, $n->transaction, Source::Webhook, $n));
+            ? new RefundProcessed($n->orderId, $resolved, $n->transaction, Source::Webhook, $key, $n)
+            : new VoidProcessed($n->orderId, $resolved, $n->transaction, Source::Webhook, $key, $n));
+
+        $this->store->markDelivered($n->orderId, $transactionId, $outcome);
     }
 }

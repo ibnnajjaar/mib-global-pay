@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
 use IbnNajjaar\MIBGlobalPay\Core\Attempts\AttemptState;
+use IbnNajjaar\MIBGlobalPay\Laravel\Events\PaymentFailed;
 use IbnNajjaar\MIBGlobalPay\Tests\Support\GatewayHarness;
 use IbnNajjaar\MIBGlobalPay\Tests\Support\InMemoryAttempt;
 use IbnNajjaar\MIBGlobalPay\Tests\Support\InMemoryPayable;
@@ -52,6 +54,41 @@ it('dedupes notifications and transactions', function (Closure $make) {
         ->and($store->claimTransaction('O-1', '2', 'payment_captured'))->toBeTrue();
 })->with('stores');
 
+it('records deliveries idempotently, sharing the record claimTransaction uses', function (Closure $make) {
+    /** @var NotificationStore $store */
+    $store = $make();
+
+    expect($store->wasDelivered('O-1', '1', 'payment_captured'))->toBeFalse();
+
+    $store->markDelivered('O-1', '1', 'payment_captured');
+    $store->markDelivered('O-1', '1', 'payment_captured');
+
+    expect($store->wasDelivered('O-1', '1', 'payment_captured'))->toBeTrue()
+        ->and($store->wasDelivered('O-1', '1', 'double_capture'))->toBeFalse()
+        ->and($store->wasDelivered('O-1', '2', 'payment_captured'))->toBeFalse()
+        ->and($store->claimTransaction('O-1', '1', 'payment_captured'))->toBeFalse();
+
+    expect($store->claimTransaction('O-2', '1', 'payment_captured'))->toBeTrue()
+        ->and($store->wasDelivered('O-2', '1', 'payment_captured'))->toBeTrue();
+})->with('stores');
+
+it('keeps cache delivery records after the TTL, which still ends the dedupe of everything else', function () {
+    $store = app(CacheNotificationStore::class);
+    Carbon::setTestNow('2026-11-01 12:00:00');
+
+    $store->markDelivered('O-1', '1', 'payment_captured');
+    $store->claimTransaction('', 'advisory', 'payment_pending');
+    $store->claim('N1');
+
+    Carbon::setTestNow(Carbon::now()->addSeconds(CacheNotificationStore::TTL_SECONDS + 1));
+
+    expect($store->wasDelivered('O-1', '1', 'payment_captured'))->toBeTrue()
+        ->and($store->claimTransaction('', 'advisory', 'payment_pending'))->toBeTrue()
+        ->and($store->claim('N1'))->toBeTrue();
+
+    Carbon::setTestNow();
+});
+
 it('binds the database store when configured, and the migration creates its table', function () {
     $store = useDatabaseStore(test());
 
@@ -72,6 +109,16 @@ it('reconciles attempts awaiting the gateway', function () {
 
     Event::assertDispatched(PaymentCaptured::class);
     expect($harness->history)->toHaveCount(1);
+});
+
+it('reports a wrong-host 404 from reconcile as an error, with no PaymentFailed for an expired attempt', function () {
+    bindResolver(hostPayable(expires: '-5 minutes'));
+    fakeGatewayResponses([GatewayHarness::json(404, '<html>Not Found</html>')]);
+    Event::fake([PaymentFailed::class]);
+
+    $this->artisan('mib:reconcile')->expectsOutputToContain('not recognised as a gateway error')->assertFailed();
+
+    Event::assertNotDispatched(PaymentFailed::class);
 });
 
 it('reports reconcile errors and keeps going', function () {
@@ -98,4 +145,18 @@ it('prunes old database records only', function () {
     $this->artisan('mib:prune-notifications', ['--days' => 2])->assertExitCode(2);
 
     expect(DB::table('mib_global_pay_notifications')->pluck('notification_id')->all())->toBe(['NEW']);
+});
+
+it('prunes advisory claims but keeps money-event delivery records, so the event stays delivered', function () {
+    $store = useDatabaseStore(test());
+    $old = ['created_at' => now()->subDays(400), 'updated_at' => now()->subDays(400)];
+    DB::table('mib_global_pay_notifications')->insert([
+        ['notification_id' => null, 'order_id' => '', 'transaction_id' => sha1('N1'), 'outcome' => 'payment_pending'] + $old,
+        ['notification_id' => null, 'order_id' => 'O-1', 'transaction_id' => '1', 'outcome' => 'payment_captured'] + $old,
+    ]);
+
+    $this->artisan('mib:prune-notifications', ['--days' => 30])->expectsOutput('Deleted 1 record(s).')->assertSuccessful();
+
+    expect($store->wasDelivered('O-1', '1', 'payment_captured'))->toBeTrue()
+        ->and($store->claimTransaction('', sha1('N1'), 'payment_pending'))->toBeTrue();
 });

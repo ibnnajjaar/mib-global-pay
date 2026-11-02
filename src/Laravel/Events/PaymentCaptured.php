@@ -12,7 +12,8 @@ use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationResult;
 /**
  * Verified Captured for exactly the frozen amount, and the payable is still payable. Mark it paid and record the settlement.
  *
- * Dispatched inside Payable::lock(). The package never changes the payable itself.
+ * Dispatched inside Payable::lock(). The package never changes the payable itself. At least once:
+ * be idempotent on $deliveryKey (64 hex characters).
  */
 final readonly class PaymentCaptured
 {
@@ -23,6 +24,7 @@ final readonly class PaymentCaptured
         public VerificationResult $verification,
         public string $transactionId,
         public Source $source,
+        public string $deliveryKey,
         public ?Notification $notification = null,
     ) {
     }

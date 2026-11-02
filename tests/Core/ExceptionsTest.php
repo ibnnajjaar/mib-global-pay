@@ -56,6 +56,28 @@ it('carries the gateway error details', function () {
         ->and($e->isAuthenticationError())->toBeFalse();
 });
 
+it('recognises only the documented error format as a gateway error', function (?string $body, bool $expected) {
+    expect((new GatewayException('x', 404, [], $body))->isGatewayError())->toBe($expected);
+})->with([
+    'each documented cause' => ['{"result":"ERROR","error":{"cause":"INVALID_REQUEST"}}', true],
+    'request rejected' => ['{"result":"ERROR","error":{"cause":"REQUEST_REJECTED"}}', true],
+    'server busy' => ['{"result":"ERROR","error":{"cause":"SERVER_BUSY"}}', true],
+    'server failed' => ['{"result":"ERROR","error":{"cause":"SERVER_FAILED"}}', true],
+    'no body' => [null, false],
+    'empty' => ['', false],
+    'HTML' => ['<html>Not Found</html>', false],
+    'a JSON list' => ['[1,2]', false],
+    'a JSON string' => ['"ERROR"', false],
+    'other JSON' => ['{"message":"Not Found"}', false],
+    'no result' => ['{"error":{"cause":"INVALID_REQUEST"}}', false],
+    'another result' => ['{"result":"FAILURE","error":{"cause":"INVALID_REQUEST"}}', false],
+    'no error object' => ['{"result":"ERROR"}', false],
+    'error is a string' => ['{"result":"ERROR","error":"Not Found"}', false],
+    'no cause' => ['{"result":"ERROR","error":{"explanation":"Not found"}}', false],
+    'an undocumented cause' => ['{"result":"ERROR","error":{"cause":"NOT_FOUND"}}', false],
+    'wrong case, the values are case sensitive' => ['{"result":"ERROR","error":{"cause":"invalid_request"}}', false],
+]);
+
 it('returns null for missing error details', function () {
     $e = new GatewayException('HTTP 401', 401, ['cause' => ['nested']]);
 
