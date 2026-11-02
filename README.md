@@ -6,7 +6,7 @@
 PHP client for **MIB (Maldives Islamic Bank) Global Pay**, the Mastercard Payment Gateway Services
 (MPGS) **Hosted Checkout**, with an optional **Laravel 12 and 13** layer.
 
-> **Version 2 is a beta and is not released yet.** See [Beta status](#beta-status). It requires
+> **Version 2 is a beta.** See [Beta status](#beta-status). It requires
 > PHP 8.4+. Upgrading from 1.1: see [UPGRADE.md](./UPGRADE.md). The design and every decision are in
 > [DESIGN-v2.md](https://github.com/ibnnajjaar/mib-global-pay/blob/main/DESIGN-v2.md).
 
@@ -16,7 +16,7 @@ proof.
 
 ## Beta status
 
-The planned first tag is `v2.0.0-beta.1`. It is not a finished 2.0.0. No authenticated sandbox flow
+The current tag is `v2.0.0-beta.1`. It is not a finished 2.0.0. No authenticated sandbox flow
 has been run against the gateway, and MIB has not answered our open questions. Test your own flow
 against the test gateway before you trust it with live payments.
 
@@ -84,8 +84,7 @@ upgrade the app to Laravel 12 or 13, or call the gateway from a separate non-Lar
 composer require ibnnajjaar/mib-global-pay:^2.0@beta --with-all-dependencies
 ```
 
-Use this same command for a Laravel 12 or 13 app and for a PHP app without a framework. `v2.0.0-beta.1` is
-not released yet, so Composer finds no matching version until it is tagged.
+Use this same command for a Laravel 12 or 13 app and for a PHP app without a framework.
 
 - `@beta` is needed because Composer installs only stable versions by default. Plain `^2.0` does not
   find a beta.
@@ -455,4 +454,4 @@ composer refactor-check  # Rector, dry run (`composer refactor` applies the chan
 
 ## License
 
-MIT. See the CHANGELOG for release notes: [CHANGELOG.md](./CHANGELOG.md).
+MIT. See [LICENSE](./LICENSE). See the CHANGELOG for release notes: [CHANGELOG.md](./CHANGELOG.md).

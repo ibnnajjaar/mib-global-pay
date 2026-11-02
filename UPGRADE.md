@@ -5,7 +5,7 @@ released 1.x version. 1.2.0 was never released; the parts of its work that carri
 rewritten on the v2 classes, and its additions to the 1.x classes are gone. The full design and
 every decision are in [DESIGN-v2.md](https://github.com/ibnnajjaar/mib-global-pay/blob/main/DESIGN-v2.md).
 
-> **Version 2 is a beta and is not released yet.** The planned first tag is `v2.0.0-beta.1`. No
+> **Version 2 is a beta.** The current tag is `v2.0.0-beta.1`. No
 > authenticated sandbox flow has been run against the gateway, so stay on 1.1 for live payments
 > until you have tested your own flow. See [Beta status](./README.md#beta-status) and
 > [Installation](./README.md#installation) in the README.

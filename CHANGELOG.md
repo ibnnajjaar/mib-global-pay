@@ -7,12 +7,10 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Keep a Changelog: https://keepachangelog.com/en/1.1.0/
 - Semantic Versioning: https://semver.org/spec/v2.0.0.html
 
-## [2.0.0-beta.1] - Unreleased
-This is a planned beta, not a finished 2.0.0, and it has not been tagged or released. No authenticated sandbox flow has been run against the gateway, and MIB has not answered our open questions, so some gateway behaviour is still unverified. The list is at the top of [DESIGN-v2.md](https://github.com/ibnnajjaar/mib-global-pay/blob/main/DESIGN-v2.md).
+## [2.0.0-beta.1] - 2026-11-02
+This is a beta, not a finished 2.0.0. No authenticated sandbox flow has been run against the gateway, and MIB has not answered our open questions, so some gateway behaviour is still unverified. The list is at the top of [DESIGN-v2.md](https://github.com/ibnnajjaar/mib-global-pay/blob/main/DESIGN-v2.md).
 
 Version 2 is a rewrite; see [UPGRADE.md](./UPGRADE.md). Install it with the command in the [README](./README.md#installation).
-
-On the day you tag `v2.0.0-beta.1`: replace `Unreleased` in this heading with the date (`## [2.0.0-beta.1] - YYYY-MM-DD`), confirm that the link at the bottom opens, then remove this paragraph and the "not released" wording here, in README.md, UPGRADE.md and DESIGN-v2.md.
 
 ### Removed
 - **Breaking:** the whole 1.x API: `MIBGlobalPayConnector`, `OrderData` / `BaseOrderData`, the `Requests\*` and `Responses\*` classes (`CheckoutSessionResponseData`, `OrderResponseData`, `TransactionResponseData`, `WebhookResponseData`, `HostedCheckoutReturnData`), `Support\*` (`Connector`, `Request`, `Response`, `Amount`, `Arr`, `Path`, `TransactionId`, the string-constant classes), `Contracts\IsOrderData` / `IsResponseData`, and the 1.x `Exceptions\MIBGlobalPayException` / `GatewayException`. Their replacements are in `IbnNajjaar\MIBGlobalPay\Core` and `\Laravel`; see UPGRADE.md.

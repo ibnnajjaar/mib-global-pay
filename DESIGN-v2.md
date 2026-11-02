@@ -1,6 +1,6 @@
 # Design: `ibnnajjaar/mib-global-pay` v2
 
-Status: **beta, not released.** The planned first tag is `v2.0.0-beta.1`. All stages are implemented, through stage 8 (1.x API removed), but no authenticated sandbox flow has been run against the gateway, and MIB has not answered the questions in §12. This document records the design and every decision.
+Status: **beta.** The current tag is `v2.0.0-beta.1`. All stages are implemented, through stage 8 (1.x API removed), but no authenticated sandbox flow has been run against the gateway, and MIB has not answered the questions in §12. This document records the design and every decision.
 
 Gateway behaviour that is still unverified. All of it is implemented, and all of it depends on MIB:
 - the exact response for an unknown order or transaction. The package assumes the format stated in §4.2, maps it to `NotFound`, and that drives the AttemptGuard supersede rule and `PaymentFailed` (MIB question 17);
