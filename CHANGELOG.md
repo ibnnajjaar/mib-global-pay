@@ -26,6 +26,7 @@ Version 2 is a rewrite; see [UPGRADE.md](./UPGRADE.md). Install it with the comm
 - Tooling: the test suite runs on Pest 4 (PHPUnit 12) with Orchestra Testbench. Laravel Pint replaces php-cs-fixer and is checked in CI. PHPStan runs at level max over all of `src`, with Larastan. Rector is added as a development tool, checked in CI, with a config chosen for this package (`rector.php`). CI tests PHP 8.4 and 8.5, each on Laravel 12 and Laravel 13.
 
 ### Added
+- An MIT `LICENSE` file, included in the package archive.
 - v2 core types under `IbnNajjaar\MIBGlobalPay\Core`: `Money` (minor units, explicit rounding, no float paths), the `Currency` enum (curated ISO 4217 subset), the gateway enums (`OrderStatus`, `TransactionType`, `Result`, `GatewayCode`, `GatewayRecommendation`) with an `Unrecognized` fallback, `ApprovalPolicy`, the null-safe `Payload` reader, `GatewayConfig` with environment presets, and the exception hierarchy (`MibGlobalPayException` marker interface).
 
 - v2 connector `Core\MibGateway` (PSR-18 transport, Guzzle 7 by default, redacted PSR-3 logging, opt-in retries for idempotent operations) with the 2.0 operations: Initiate Checkout, Retrieve Session, Update Session (experimental), Retrieve Order, Retrieve Transaction, Capture, Refund, Void, Update Authorization, Check Gateway and Payment Options Inquiry, plus typed readonly response DTOs. Requires `psr/http-client`, `psr/http-factory` and `psr/log`.
