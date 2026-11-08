@@ -1,9 +1,11 @@
 ---
 id: TASK-14.12
 title: 'QA: payment links (create, pay, expiry, attempts, delete)'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08 11:09'
+updated_date: '2026-11-08 13:23'
 labels:
   - qa
 dependencies:
@@ -54,5 +56,15 @@ As listed. Record each `errorCode` the gateway actually sends, because the mappi
 <!-- AC:BEGIN -->
 - [ ] #1 A payment link opens the gateway page, and paying through it captures the invoice
 - [ ] #2 A paid, over-used, deleted and (if possible) expired link each show the matching message, with the real errorCode recorded
-- [ ] #3 An unknown errorCode shows the generic message
+- [x] #3 An unknown errorCode shows the generic message
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Run 2026-11-08 ~18:23 +05:00 (curl through the tunnel; harness log shows the package's redacted request/response log lines).
+Step 1, four links (INV-0008 days=7 attempts=3, INV-0009 days=7 attempts=1, INV-0010 days=7, INV-0011 minutes=5): every Initiate Checkout with a paymentLink was refused and the harness answered 500; no attempt rows were created (the package rolls back).
+- With numberOfAllowedAttempts set: HTTP 400 {"error":{"cause":"INVALID_REQUEST","explanation":"MSO does not support privilege PAYMENT_LINK."},"result":"ERROR"}. BLOCKER: payment links are not enabled for TESTIUMMPGS (nor its MSO). MIB must enable the PAYMENT_LINK privilege before steps 2-6 can run.
+- Without it (attempts omitted): HTTP 400 {"error":{"cause":"INVALID_REQUEST","explanation":"Missing parameter","field":"paymentLink.numberOfAllowedAttempts","validationType":"MISSING"},"result":"ERROR"} (checked before the privilege). FINDING: the gateway requires paymentLink.numberOfAllowedAttempts, but CheckoutRequest::withPaymentLink() and MibGlobalPay::startPaymentLink() treat allowedAttempts as optional (default null, omitted from the body), and README's example startPaymentLink($invoice, now()->addDays(7)) leaves it out. That call will always fail on this gateway. Package code not changed; owner to decide (make it required, or default it).
+Step 7 and the package's message mapping, via {APP}/mib/link-error?errorCode=... (all 200): SOMETHING_ELSE and empty -> 'This payment link could not be opened. Please try again later.'; PAID -> 'This order has already been paid.'; USAGE_COUNT_EXCEEDED -> 'This payment link has been tried too many times. Please ask for a new one.'; DELETED and DOES_NOT_EXIST -> 'This payment link is no longer valid.'; EXPIRED -> 'This payment link has expired. Please ask for a new one.'. The real errorCodes the gateway sends remain unconfirmed (links disabled). Kept In Progress until MIB enables payment links.
+<!-- SECTION:NOTES:END -->
