@@ -1,11 +1,11 @@
 ---
 id: TASK-5
 title: 'Update README, changelog and status wording for the v2 beta'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-01 11:16'
-updated_date: '2026-11-02 02:13'
+updated_date: '2026-11-08 09:16'
 labels:
   - v2-beta
 dependencies: []
@@ -35,7 +35,7 @@ The unverified gateway items are in `DESIGN-v2.md`, §12 and `docs/mib-questions
 <!-- AC:BEGIN -->
 - [x] #1 The README install command works for the beta, and has been tried in a clean Composer project
 - [x] #2 The README and `DESIGN-v2.md` state it is a beta, and which gateway behaviour is still unverified
-- [ ] #3 The changelog has a beta heading, its date, and a working compare link at the bottom
+- [x] #3 The changelog has a beta heading, its date, and a working compare link at the bottom
 - [x] #4 The changelog no longer says the 1.x API is unchanged
 - [x] #5 The 1.2 section no longer presents removed APIs as shipping, while its fixes that still apply to v2 stay listed
 <!-- AC:END -->
@@ -71,4 +71,12 @@ Links: scripted check over the archive's Markdown: 0 failures, 1 pending (the be
 Checks: pest 580 passed, 32 skipped; pint, phpstan, rector and composer validate --strict clean.
 
 Correction to the #5 note: the script runs 40 checks, not 41, and all 40 pass.
+
+Release date set to 2026-11-08, the day v2.0.0-beta.1 was tagged on merge commit d65cc3b. The compare link v1.1.0...v2.0.0-beta.1 now resolves (GitHub API: ahead by 40).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Docs mark v2 as a beta with tag v2.0.0-beta.1, dated 2026-11-08; the compare link was checked through the GitHub API after the tag was pushed.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -1,11 +1,11 @@
 ---
 id: TASK-6
 title: Exclude development files from the package archive
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-01 11:16'
-updated_date: '2026-11-02 02:04'
+updated_date: '2026-11-08 09:16'
 labels:
   - v2-beta
 dependencies: []
@@ -27,7 +27,7 @@ The tests and tooling configs still need to be available from a source checkout,
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 A clean install from the archive boots the service provider, publishes the config and migration, and renders the checkout component
-- [ ] #2 CI still passes from a source checkout
+- [x] #2 CI still passes from a source checkout
 - [x] #3 Links in the README to excluded files are absolute URLs, or are removed
 - [x] #4 `git archive HEAD` contains `src`, `config`, `database`, `resources`, `composer.json`, `README.md`, `UPGRADE.md`, `CHANGELOG.md` and the licence text if one is added, and no tests, tooling or CI files
 <!-- AC:END -->
@@ -56,4 +56,12 @@ Verified on a temporary tree, not literally HEAD, because nothing is committed: 
 #2 open: real CI has not run on these changes (branch not pushed). Local equivalent from a clean extract of the tree, with composer update and every workflow step, MySQL 8.4 and PostgreSQL 17 throwaway containers on the CI ports: PHP 8.5.11 and PHP 8.4.27 each passed validate, pint, rector, phpstan and pest (612 passed, 0 skipped). Not covered: GitHub Actions itself, the ubuntu runner, the coverage badge step.
 
 Repo checks without database servers: pest 580 passed, 32 skipped; pint, phpstan, rector and composer validate --strict clean.
+
+CI run 42466032927 on PR #1 passes from a source checkout on all four jobs.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Development files are export-ignored from the archive; checked with git archive and by the passing CI run 42466032927 from a source checkout.
+<!-- SECTION:FINAL_SUMMARY:END -->

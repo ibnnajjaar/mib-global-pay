@@ -1,11 +1,11 @@
 ---
 id: TASK-4
 title: Stop the Laravel layer loading on unsupported Laravel versions
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-01 11:16'
-updated_date: '2026-11-02 04:34'
+updated_date: '2026-11-08 09:16'
 labels:
   - v2-beta
 dependencies: []
@@ -35,7 +35,7 @@ The core is framework-free and stays usable by non-Laravel hosts. A Laravel app 
 - [x] #4 The README states the supported Laravel versions and how core-only use works on other versions
 - [x] #5 Laravel 12 and 13 both install and boot from the archive, and Laravel 10, 11 and 14 are refused by Composer
 - [x] #6 The commands of every CI matrix cell pass when run by hand: Laravel 12 with Testbench 10 and Laravel 13 with Testbench 11, on PHP 8.4 and 8.5
-- [ ] #7 Laravel 12 and 13 are both tested in real CI, and the runs pass
+- [x] #7 Laravel 12 and 13 are both tested in real CI, and the runs pass
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -91,10 +91,12 @@ Guzzle differs: a fresh Laravel 12 app has Guzzle 7.16.1, and the install works 
 CI: the workflow YAML parses and expands to 4 cells, each with the right Testbench. Coverage and the badge are limited to PHP 8.4 with Laravel 13. It has not run in real CI, so #7 stays open and the task stays In Progress. Testing of older 12 releases is not in CI; CI uses the newest 12 and 13 only.
 
 Repo checks: pest 727 passed, 50 skipped; pint --test, phpstan, rector --dry-run and composer validate --strict exit 0. composer update --lock changed only the content hash of the local lock.
+
+CI run 42466032927 on PR #1: PHP 8.4 and 8.5 on Laravel 12 and 13 all pass, 1063 tests each with none skipped, MySQL and PostgreSQL included. The first PHP 8.4/Laravel 12 attempt failed before tests because the runner's port 53306 was taken; the re-run passed.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Composer now installs the package on Laravel 12 and 13 and refuses every other Laravel version, through a conflict on laravel/framework <12.0 || >=14.0. Non-Laravel hosts are unaffected. Laravel 12 is allowed because the suite passes there, the owner's merchant app is on it, and its security support ends on 2027-02-24. ProcessNotification no longer uses FailOnException, which only exists from 12.19.0 and left webhooks failing on older 12. CI gains a Laravel dimension. Decision recorded in DESIGN-v2.md Q22; README, UPGRADE and CHANGELOG updated. Verified with the CI commands by hand on Laravel 12 and 13 on PHP 8.4 and 8.5 (727 passed, 50 skipped real-database tests), fresh apps from an archive, Laravel 10 and 11 refused, a stand-in for Laravel 14, and a core-only install. Not yet run in real CI.
+Composer refuses Laravel versions other than 12 and 13; verified by the passing four-job CI matrix in run 42466032927.
 <!-- SECTION:FINAL_SUMMARY:END -->

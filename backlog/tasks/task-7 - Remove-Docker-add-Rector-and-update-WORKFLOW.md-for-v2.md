@@ -1,11 +1,11 @@
 ---
 id: TASK-7
 title: 'Remove Docker, add Rector and update WORKFLOW.md for v2'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-01 11:40'
-updated_date: '2026-11-01 11:46'
+updated_date: '2026-11-08 09:16'
 labels:
   - v2-beta
 dependencies: []
@@ -25,7 +25,7 @@ PHPStan with Larastan is already at `level: max` and runs in CI, so it needs no 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 Docker files and every reference to them are gone
-- [ ] #2 Rector runs through a Composer script and is checked in CI
+- [x] #2 Rector runs through a Composer script and is checked in CI
 - [x] #3 Rector changes do not alter payment behaviour: tests, Pint and PHPStan all pass afterwards
 - [x] #4 `WORKFLOW.md` matches the v2 code
 <!-- AC:END -->
@@ -46,4 +46,12 @@ PHPStan stays as it is: already level max with Larastan and enforced in CI.
 Rector rules off, with reasons in `rector.php`: nullable instanceof and flip rules, static-to-non-static, nullsafe coalesce, arrow return types, `@var` removal (it deleted an annotation PHPStan needs in `SessionUpdate::toBody()`). Tests are not processed.
 
 Verified locally on PHP 8.5: 504 tests pass, Pint clean, PHPStan max clean, `rector --dry-run` clean. AC 2 stays open until the new CI step has run on a push; PHP 8.4 also not run locally.
+
+CI run 42466032927 on PR #1 runs vendor/bin/rector process --dry-run (Rector is done) and PHPStan (No errors) in every job.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Docker removed, Rector added as a Composer script and CI step, WORKFLOW.md updated; verified by Rector and PHPStan passing in CI run 42466032927.
+<!-- SECTION:FINAL_SUMMARY:END -->
