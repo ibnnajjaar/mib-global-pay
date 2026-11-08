@@ -9,6 +9,9 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+### Added
+- `GatewayException::isOperationNotEnabled()`: true when the gateway refuses an operation the merchant has not enabled (HTTP 400, `INVALID_REQUEST`, field `interaction.operation`, validationType `INVALID`), such as AUTHORIZE on the purchase-only MIB test merchant.
+
 ### Removed
 - `Core\Exceptions\OperationNotEnabled`. Nothing threw it; an operation the merchant has not enabled arrives as a `GatewayException` (HTTP 400, `error.field` `interaction.operation`).
 

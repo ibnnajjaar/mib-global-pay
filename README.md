@@ -644,6 +644,20 @@ Every exception implements `Core\Exceptions\MibGlobalPayException`:
 (HTTP 4xx/5xx, with `cause()`, `explanation()`, `field()`, `supportCode()`), `TransportException`
 (no response), `MalformedPayload`, `SecretMismatch`, `MalformedNotification`, `ConfigurationException`.
 
+An operation the merchant has not enabled (for example AUTHORIZE when only PURCHASE is enabled) comes back as a
+`GatewayException`. Check for it with `isOperationNotEnabled()`:
+
+```php
+try {
+    $attempt = MibGlobalPay::startCheckout($invoice, InteractionOperation::Authorize);
+} catch (GatewayException $e) {
+    if ($e->isOperationNotEnabled()) {
+        // ask MIB to enable it, or fall back to PURCHASE
+    }
+    throw $e;
+}
+```
+
 ## Security notes
 
 - Keep the API password and webhook secret in the environment; they are redacted from logs and debug output.

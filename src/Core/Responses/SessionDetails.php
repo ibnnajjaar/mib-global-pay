@@ -43,6 +43,12 @@ final readonly class SessionDetails
         );
     }
 
+    /**
+     * Whether the gateway reports the last update of this session as successful (session.updateStatus
+     * SUCCESS). It does not say whether the payer can still use the session: on the MIB test gateway
+     * a session past its interaction timeout still reads SUCCESS, with interaction.timeout "0"
+     * (observed once, 2026-11-08).
+     */
     public function isUsable(): bool
     {
         return $this->updateStatus === SessionUpdateStatus::Success;
