@@ -1,9 +1,11 @@
 ---
 id: TASK-14.17
 title: 'QA: identifiers and Update Session on a live session (MIB Q3, Q4, Q16)'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08 11:09'
+updated_date: '2026-11-08 13:32'
 labels:
   - qa
 dependencies:
@@ -52,7 +54,18 @@ Record the facts. These steps answer questions rather than check known behaviour
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Which reference characters the gateway accepts is recorded
+- [x] #1 Which reference characters the gateway accepts is recorded
 - [ ] #2 Whether Update Session changes the amount the payer sees on a live session is recorded
 - [ ] #3 What happens to a session after its interaction timeout is recorded
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Run 2026-11-08 18:20-18:32 +05:00, script ~/Herd/mib-qa/qa-scripts/14.17-identifiers-update-session.php (refs | update | timeout | check <session>).
+Step 1, order IDs the package generates (attemptOrderId(ref, 1), prefix QA): '(R)INV/2026/123' -> QA-R-INV-2026-123-1; 'INV 2026 123' -> QA-INV-2026-123-1; 'ފައިސާ-1' -> QA-1-1 (Dhivehi dropped entirely); 'A&B#1' -> QA-A-B-1-1; 'inv_2026-ok' -> QA-inv_2026-ok-1. NOTE: a reference made only of non-Latin text collapses to almost nothing ('ފައިސާ-1' -> QA-1-1), so two Dhivehi-only references can map to the same readable ID; the README says randomOrderId() is the fallback on a collision.
+order.reference via withReference() on random order IDs; all ACCEPTED by Initiate Checkout and echoed back unchanged by Retrieve Session: '(R)INV/2026/123', 'INV 2026 123', 'ފައިސާ' (UTF-8 kept), 'A&B', 'C#1', and the combination '(R)INV/2026/123 ފައިސާ & #9'. (Retrieve Order cannot echo it because the gateway does not know an order until a payment is attempted, see TASK-14.3.)
+Step 2: session for QA-LPELUO4OXFFQPETC at 10.00 MVR, then updateSession(orderAmount 12.00 MVR) -> updateStatus SUCCESS, orderAmount 12.00, new session version c5baa8e002; Retrieve Session afterwards shows 12.00, operation PURCHASE. So the gateway accepts an amount change on a live session.
+Step 3 (what the payer sees, 10.00 or 12.00): NOT DONE, the gateway's payment page is down (TASK-14.5); session SESSION0002784034737H0155493K55 also shows 'Payment Page - System Error'.
+Step 4: session QA-W3DA7RHTKABBVSBP created 13:20:45 UTC with withTimeout(600) (Retrieve Session interaction.timeout 600). At 13:32:04 UTC (11 min 19 s later) Retrieve Session still succeeds: updateStatus SUCCESS, order 10.00 MVR, interaction.timeout now '0'. FINDING (minor): SessionDetails::isUsable() returns true for that expired session because it only checks updateStatus; an elapsed interaction timeout shows only as interaction.timeout '0'. Nothing in the package calls isUsable() today. What the browser shows for an expired session could not be told apart from the outage.
+<!-- SECTION:NOTES:END -->
