@@ -1,9 +1,11 @@
 ---
 id: TASK-14.11
 title: 'QA: webhook delivery, secret check, dedupe and headers (MIB Q18, Q19)'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08 11:09'
+updated_date: '2026-11-08 13:22'
 labels:
   - qa
 dependencies:
@@ -58,8 +60,25 @@ The harness is reachable through its public tunnel, `MibGlobalPay::webhookUrl()`
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A real webhook arrives, and its header names, attempt counter, ID header and body shape are recorded
-- [ ] #2 A wrong secret gets 401, a malformed body gets 400, and a replayed notification gets 200 without a second money event
+- [x] #1 A real webhook arrives, and its header names, attempt counter, ID header and body shape are recorded
+- [x] #2 A wrong secret gets 401, a malformed body gets 400, and a replayed notification gets 200 without a second money event
 - [ ] #3 A payment whose payer never returns is settled by the webhook alone
-- [ ] #4 The temporary raw-request logging is removed afterwards
+- [x] #4 The temporary raw-request logging is removed afterwards
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Run 2026-11-08. Step 1 deviation: instead of a temporary logging middleware, the raw requests were read from the ngrok inspector (127.0.0.1:4040), which records every request through the tunnel; the X-Notification-Secret value was redacted when reading. No harness code was added, so nothing needs removing.
+Real gateway notifications (MIB Q18/Q19):
+- Headers as delivered through ngrok (ngrok may canonicalise case): Accept */*, Accept-Encoding gzip,deflate, Content-Type 'application/json;charset=utf-8', User-Agent 'AHC/2.1', X-Notification-Attempt, X-Notification-Id, X-Notification-Secret. Source IP 12.22.155.240.
+- X-Notification-Id: 64 hex characters (e.g. 465baa3c84…), the same on every retry of one notification. X-Notification-Attempt starts at 1 and counts up per retry.
+- Retry schedule when the endpoint returned 401 (TASK-14.4): attempts 1-6 at 16:36:33, 16:37:45, 16:39:18, 16:42:21, 16:48:23, 17:19:25 +05:00 (gaps ~1.2, 1.5, 3, 6, 31 min). Attempt 6 got 200 and was a duplicate.
+- One 3DS card payment sends two notifications: transaction.type AUTHENTICATION (id trans-60) and PAYMENT (id 1). A void sends one: notification 610c707ea7 (attempt 1) arrived ~50 s after the void call.
+- Body shape (PAYMENT, QA-INV-0001-1): top-level keys authentication{3ds,3ds2,amount,time,transactionId,version}, authorizationResponse{...}, device{browser,ipAddress}, gatewayEntryPoint CHECKOUT_VIA_WEBSITE, merchant, order{amount,authenticationStatus,chargeback,creationTime,currency,description,id,lastUpdatedTime,merchantAmount,merchantCategoryCode,merchantCurrency,notificationUrl,reference,status,totalAuthorizedAmount,totalCapturedAmount,totalDisbursedAmount,totalRefundedAmount}, orderEventPKBucket, orderEventPKInsertionTime, response{acquirerCode,acquirerMessage,cardSecurityCode,gatewayCode,gatewayRecommendation}, result, sourceOfFunds{provided.card{brand,expiry,fundingMethod,issuerCountryCode,nameOnCard,number (masked 512345xxxxxx0008),scheme,storedOnFile},type}, timeOfLastUpdate, timeOfRecord, transaction{acquirer{...},amount,authenticationStatus,authorizationCode,currency,id,receipt,source,stan,terminal,type}, version '100'. Amounts are JSON numbers (10.00), not strings. The AUTHENTICATION body has the same layout with transaction.type AUTHENTICATION and order totals 0.
+Step 3: dashboard notifications table: 465baa3c84 processed, 31c4ed844a ignored; exactly one PaymentCaptured (TASK-14.4).
+Step 4 (curl through the tunnel, 18:21 +05:00; secret read from .env, never echoed): (a) wrong secret -> 401; no secret header -> 401 {"error":"unauthorized"}. (b) malformed JSON with the right secret -> 400 {"error":"malformed notification"}; '{}' -> 400 too. (c) replays of real notifications via the inspector: 465baa3c84 and 31c4ed844a at 16:58:18 -> 200, and void notification 610c707ea7 replayed at 18:21:32 -> 200; no second PaymentCaptured / VoidProcessed / PaymentReversed, and no new row in mib_global_pay_notifications. The gateway's own attempt-6 retry at 17:19 was also a 200 duplicate.
+Void notification processing: VoidProcessed and PaymentReversed recorded once each (source webhook, distinct deliveryKeys), attempt QA-INV-0001-1 reversed_at set.
+Step 5 (payer never returns) NOT DONE: the gateway's Hosted Checkout is down (see TASK-14.5), so no new payment can be made. Kept In Progress for that.
+Harness note: the queue worker had been running code from before the RecordMibEvent fix (workers keep loaded code), so NotificationReceived rows up to id 5 have no gateway order ID; the worker was restarted at 18:21.
+<!-- SECTION:NOTES:END -->
