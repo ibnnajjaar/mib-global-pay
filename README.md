@@ -57,7 +57,7 @@ with the questions for MIB in its §12.
 ## Requirements
 
 - PHP 8.4 or 8.5
-- `guzzlehttp/guzzle` ^7.9 (default transport) or any PSR-18 client
+- `guzzlehttp/guzzle` ^7.9 or ^8.0 (default transport), or any PSR-18 client
 - Laravel 12 or 13 for the optional Laravel layer
 
 ### Supported Laravel versions
@@ -83,17 +83,14 @@ upgrade the app to Laravel 12 or 13, or call the gateway from a separate non-Lar
 ## Installation
 
 ```bash
-composer require ibnnajjaar/mib-global-pay:^2.0@beta --with-all-dependencies
+composer require ibnnajjaar/mib-global-pay:^2.0@beta
 ```
 
-Use this same command for a Laravel 12 or 13 app and for a PHP app without a framework.
+Use this same command for a Laravel 12 or 13 app and for a PHP app without a framework. `@beta` is
+needed because Composer installs only stable versions by default. Plain `^2.0` does not find a beta.
 
-- `@beta` is needed because Composer installs only stable versions by default. Plain `^2.0` does not
-  find a beta.
-- `--with-all-dependencies` is needed on Laravel 13. A fresh Laravel 13 app ships Guzzle 8 and this
-  package needs Guzzle 7, so Composer has to move Guzzle to 7.x. Without the flag it stops and reports
-  that Guzzle is fixed to 8.x. A fresh Laravel 12 app already has Guzzle 7, so the flag changes nothing
-  there.
+The package works with Guzzle 7.9+ and Guzzle 8, so it keeps the Guzzle version your app already has:
+7.x on a fresh Laravel 12 app, 8.x on a fresh Laravel 13 app.
 
 ## Core usage (any PHP app)
 

@@ -54,7 +54,7 @@ use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationResult;
 /**
  * The v2 gateway client.
  *
- * Transport is any PSR-18 client; by default a Guzzle 7 client with the configured timeout.
+ * Transport is any PSR-18 client; by default a Guzzle (7 or 8) client with the configured timeout.
  * A custom client is responsible for its own timeouts. Request and response bodies are logged
  * at debug level with secrets redacted.
  */
