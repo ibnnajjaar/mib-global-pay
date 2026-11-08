@@ -67,6 +67,7 @@ $gatewayButNotNotFound = [
     '400 order.reference does not exist' => [400, ['result' => 'ERROR', 'error' => ['cause' => 'INVALID_REQUEST', 'explanation' => 'order.reference does not exist']]],
     '400 unable to find order.reference' => [400, ['result' => 'ERROR', 'error' => ['cause' => 'INVALID_REQUEST', 'explanation' => 'Unable to find order.reference']]],
     '400 echoing a value' => [400, ['result' => 'ERROR', 'error' => ['cause' => 'INVALID_REQUEST', 'explanation' => "Value 'order not found' is invalid"]]],
+    '400 MIB unknown transaction, which names a transaction' => [400, ['error' => ['cause' => 'INVALID_REQUEST', 'explanation' => 'Unable to find order SHOP-R-1-1 and transaction void-1 for merchant TESTIUMMPGS'], 'result' => 'ERROR']],
     '401 saying not found' => [401, ['result' => 'ERROR', 'error' => ['cause' => 'INVALID_REQUEST', 'explanation' => 'Order not found']]],
     '500 saying not found' => [500, ['result' => 'ERROR', 'error' => ['cause' => 'SERVER_FAILED', 'explanation' => 'Order not found']]],
 ];
@@ -80,6 +81,7 @@ $gatewayNotFound = [
     '400 order with an ID not found' => [400, ['result' => 'ERROR', 'error' => ['cause' => 'INVALID_REQUEST', 'explanation' => 'Order SHOP-R-1-1 not found']]],
     '400 the order with id was not found' => [400, ['result' => 'ERROR', 'error' => ['cause' => 'INVALID_REQUEST', 'explanation' => 'The order with id SHOP-R-1-1 was not found']]],
     '400 order does not exist' => [400, ['result' => 'ERROR', 'error' => ['cause' => 'INVALID_REQUEST', 'explanation' => 'Order does not exist']]],
+    '400 MIB test gateway, observed' => [400, ['error' => ['cause' => 'INVALID_REQUEST', 'explanation' => 'Unable to find order SHOP-R-1-1 for merchant TESTIUMMPGS'], 'result' => 'ERROR']],
 ];
 
 it('throws from verifyCapture when the response is not a gateway error', function (int $status, array|string $body) {
@@ -135,6 +137,10 @@ it('applies the same rule to a transaction, naming the transaction on a 400', fu
     '400 unable to find transaction' => [400, GatewayHarness::errorBody(['explanation' => 'Unable to find transaction void-1']), true],
     '400 order not found' => [400, GatewayHarness::errorBody(['explanation' => 'Order not found']), false],
     '400 transaction.reference' => [400, GatewayHarness::errorBody(['explanation' => 'Unable to find transaction.reference']), false],
+    '400 MIB test gateway, observed' => [400, GatewayHarness::errorBody(['explanation' => 'Unable to find order QA-INV-0001-1 and transaction nope-1 for merchant TESTIUMMPGS']), true],
+    '400 order and transaction.reference' => [400, GatewayHarness::errorBody(['explanation' => 'Unable to find order X-1 and transaction.reference']), false],
+    '400 MIB unknown order, no transaction named' => [400, GatewayHarness::errorBody(['explanation' => 'Unable to find order QA-INV-0001-1 for merchant TESTIUMMPGS']), false],
+    '400 field-level validation, observed wording' => [400, GatewayHarness::errorBody(['explanation' => 'Unable to find order X-1 and transaction Y-1 for merchant M', 'field' => 'transaction.id', 'validationType' => 'INVALID']), false],
     '404 no result' => [404, ['error' => ['cause' => 'INVALID_REQUEST']], false],
 ]);
 

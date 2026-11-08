@@ -114,6 +114,19 @@ it('builds a payment link request', function () {
     ])->and($operation->path())->toBe('session');
 });
 
+it('always sends the payment link attempt count, 25 when none is given', function (?int $given, int $sent) {
+    $body = featureCheckout()
+        ->withDescription('Fees')
+        ->withMerchantDetails(url: 'https://x.mv')
+        ->withPaymentLink(allowedAttempts: $given);
+
+    expect((new InitiatePaymentLink($body))->body(featureConfig())['paymentLink']['numberOfAllowedAttempts'])->toBe($sent);
+})->with([
+    'none given' => [null, CheckoutRequest::DEFAULT_PAYMENT_LINK_ATTEMPTS],
+    'one' => [1, 1],
+    'seven' => [7, 7],
+]);
+
 it('parses a payment link response', function () {
     $link = PaymentLink::fromPayload(Payload::fromArray([
         'result' => 'SUCCESS',

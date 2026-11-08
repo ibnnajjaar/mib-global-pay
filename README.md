@@ -302,6 +302,10 @@ $link->url;                              // share this
 $gateway->deletePaymentLink($link->id);  // if it is no longer needed
 ```
 
+The attempt count is always sent: 25 (`CheckoutRequest::DEFAULT_PAYMENT_LINK_ATTEMPTS`) when you pass none, because
+the MIB gateway rejects a link without it. Payment links must also be enabled for your merchant; the MIB test merchant
+refuses them with "MSO does not support privilege PAYMENT_LINK".
+
 ### Reversing a capture
 
 ```php
@@ -639,6 +643,20 @@ Every exception implements `Core\Exceptions\MibGlobalPayException`:
 `InvalidRequest` / `InvalidAmount` / `UnsupportedCurrency` (before sending), `GatewayException`
 (HTTP 4xx/5xx, with `cause()`, `explanation()`, `field()`, `supportCode()`), `TransportException`
 (no response), `MalformedPayload`, `SecretMismatch`, `MalformedNotification`, `ConfigurationException`.
+
+An operation the merchant has not enabled (for example AUTHORIZE when only PURCHASE is enabled) comes back as a
+`GatewayException`. Check for it with `isOperationNotEnabled()`:
+
+```php
+try {
+    $attempt = MibGlobalPay::startCheckout($invoice, InteractionOperation::Authorize);
+} catch (GatewayException $e) {
+    if ($e->isOperationNotEnabled()) {
+        // ask MIB to enable it, or fall back to PURCHASE
+    }
+    throw $e;
+}
+```
 
 ## Security notes
 

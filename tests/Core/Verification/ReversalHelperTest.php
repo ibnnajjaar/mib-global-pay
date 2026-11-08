@@ -118,6 +118,7 @@ it('refunds after an HTTP 400 on the void only once a read shows the void absent
 })->with([
     'read gives a gateway 404' => fn () => GatewayHarness::notFound(),
     'read gives a gateway 400, not found' => fn () => GatewayHarness::json(400, GatewayHarness::errorBody(['explanation' => 'Transaction not found'])),
+    'read gives the MIB test gateway 400' => fn () => GatewayHarness::json(400, GatewayHarness::errorBody(['explanation' => 'Unable to find order ORDER-1 and transaction void-1 for merchant TEST123'])),
     'read gives 200, empty' => fn () => GatewayHarness::json(200, ['merchant' => 'TEST123']),
     'read shows a definite decline' => fn () => GatewayHarness::json(200, voidResponse('FAILURE', 'DECLINED')),
 ]);

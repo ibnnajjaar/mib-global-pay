@@ -132,8 +132,8 @@ final readonly class CaptureVerifier
      * Whether a Retrieve Order failure means "no such order". NotFound counts as unpaid and can
      * allow a new attempt, so when unsure this says no and the exception reaches the caller.
      *
-     * Unverified against the MIB sandbox, and the docs do not describe this case (DESIGN-v2.md §4.2).
-     * It needs the documented error format with cause INVALID_REQUEST and no field-level validation
+     * The docs do not describe this case (DESIGN-v2.md §4.2). The MIB test gateway answers HTTP 400
+     * "Unable to find order X for merchant M" (observed 2026-11-08), which this accepts. It needs the documented error format with cause INVALID_REQUEST and no field-level validation
      * details, and then either HTTP 404 with any wording, or HTTP 400 whose explanation says the
      * order is what is missing. The docs say the explanation's format cannot be guaranteed, so a
      * 404 does not depend on it. They describe a 400 as a malformed request, so a 400 does.
@@ -146,7 +146,8 @@ final readonly class CaptureVerifier
     /**
      * The same rule for a Retrieve Transaction failure, with the 400 text naming the transaction.
      * A 404 cannot tell an unknown transaction from an unknown order, and either way the
-     * transaction is absent. Equally unverified.
+     * transaction is absent. The MIB test gateway's 400 text names both ("Unable to find order X
+     * and transaction Y for merchant M") and is accepted here.
      */
     public static function isTransactionNotFound(GatewayException $e): bool
     {
@@ -169,10 +170,20 @@ final readonly class CaptureVerifier
      * "Unable to find order X", "Order not found", "The order with id X-1 was not found", "Order X-1
      * does not exist". The subject must be what is missing, so "Merchant not found for order X" and
      * "Order reference not found" do not count, nor does a value echoed back in a validation message.
+     *
+     * The MIB test gateway (2026-11-08) answers an unknown order with "Unable to find order X for
+     * merchant M", and an unknown transaction with "Unable to find order X and transaction Y for
+     * merchant M", the same text whether the order or only the transaction is missing. That text
+     * counts for a transaction and not for an order.
      */
     private static function saysMissing(string $explanation, string $subject): bool
     {
         $end = '(?![\w-]|\.\w)';
+        $orderAndTransaction = "/^unable to find (?:the |an? )?order \S+ and (?:the |an? )?transaction{$end}/i";
+
+        if (preg_match($orderAndTransaction, $explanation) === 1) {
+            return $subject === 'transaction';
+        }
 
         return preg_match(
             "/^(?:unable to find (?:the |an? )?{$subject}{$end}|(?:the )?{$subject}(?: (?:with )?id)?(?: \S*\d\S*)? (?:was )?(?:not found|does not exist)\b)/i",

@@ -102,6 +102,21 @@ final class GatewayException extends \RuntimeException implements MibGlobalPayEx
         return is_array($error) && in_array($error['cause'] ?? null, self::CAUSES, true);
     }
 
+    /**
+     * Whether the gateway refused the request because the merchant has not enabled the operation,
+     * such as AUTHORIZE on a purchase-only merchant. The MIB gateway answers HTTP 400 with cause
+     * INVALID_REQUEST, field interaction.operation and validationType INVALID (observed 2026-11-08).
+     * This relies on those fields, not on the explanation, whose wording is not guaranteed.
+     */
+    public function isOperationNotEnabled(): bool
+    {
+        return $this->httpStatus === 400
+            && $this->isGatewayError()
+            && $this->cause() === 'INVALID_REQUEST'
+            && $this->field() === 'interaction.operation'
+            && $this->validationType() === 'INVALID';
+    }
+
     private function errorString(string $key): ?string
     {
         $value = $this->error[$key] ?? null;

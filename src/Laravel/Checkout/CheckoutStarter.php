@@ -66,8 +66,8 @@ final readonly class CheckoutStarter
     }
 
     /**
-     * A shareable payment link: $attempt->paymentUrl() is the link. The gateway defaults to 3 months
-     * and 25 attempts.
+     * A shareable payment link: $attempt->paymentUrl() is the link. It expires in 3 months and
+     * allows 25 attempts unless you pass other values; the attempt count is always sent.
      *
      * @param (Closure(CheckoutRequest): CheckoutRequest)|null $customize adds anything else to the request
      *

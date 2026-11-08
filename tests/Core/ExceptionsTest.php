@@ -9,7 +9,6 @@ use IbnNajjaar\MIBGlobalPay\Core\Exceptions\CurrencyMismatch;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\GatewayException;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\MalformedPayload;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\TransportException;
-use IbnNajjaar\MIBGlobalPay\Core\Exceptions\OperationNotEnabled;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\UnsupportedCurrency;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\MalformedNotification;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\MibGlobalPayException;
@@ -26,7 +25,6 @@ it('implements the marker interface on the matching SPL exception', function (st
     [UnsupportedCurrency::class, InvalidArgumentException::class],
     [CurrencyMismatch::class, DomainException::class],
     [ConfigurationException::class, DomainException::class],
-    [OperationNotEnabled::class, DomainException::class],
     [SecretMismatch::class, RuntimeException::class],
     [MalformedNotification::class, UnexpectedValueException::class],
     [MalformedPayload::class, UnexpectedValueException::class],
@@ -76,6 +74,22 @@ it('recognises only the documented error format as a gateway error', function (?
     'no cause' => ['{"result":"ERROR","error":{"explanation":"Not found"}}', false],
     'an undocumented cause' => ['{"result":"ERROR","error":{"cause":"NOT_FOUND"}}', false],
     'wrong case, the values are case sensitive' => ['{"result":"ERROR","error":{"cause":"invalid_request"}}', false],
+]);
+
+it('recognises an operation the merchant has not enabled', function (int $status, ?string $body, bool $expected) {
+    $decoded = json_decode($body ?? '', true);
+    $error = is_array($decoded) && is_array($decoded['error'] ?? null) ? $decoded['error'] : [];
+
+    expect((new GatewayException('x', $status, $error, $body))->isOperationNotEnabled())->toBe($expected);
+})->with([
+    'MIB test gateway, observed' => [400, '{"error":{"cause":"INVALID_REQUEST","explanation":"Value AUTHORIZE is invalid. Merchant TESTIUMMPGS is not enabled for AUTHORIZE., please contact your Service Provider for expected values.","field":"interaction.operation","validationType":"INVALID"},"result":"ERROR"}', true],
+    'no explanation' => [400, '{"result":"ERROR","error":{"cause":"INVALID_REQUEST","field":"interaction.operation","validationType":"INVALID"}}', true],
+    'another field' => [400, '{"result":"ERROR","error":{"cause":"INVALID_REQUEST","field":"order.amount","validationType":"INVALID"}}', false],
+    'missing, not invalid' => [400, '{"result":"ERROR","error":{"cause":"INVALID_REQUEST","field":"interaction.operation","validationType":"MISSING"}}', false],
+    'another cause' => [400, '{"result":"ERROR","error":{"cause":"REQUEST_REJECTED","field":"interaction.operation","validationType":"INVALID"}}', false],
+    'not the gateway format' => [400, '{"error":{"cause":"INVALID_REQUEST","field":"interaction.operation","validationType":"INVALID"}}', false],
+    'another status' => [401, '{"result":"ERROR","error":{"cause":"INVALID_REQUEST","field":"interaction.operation","validationType":"INVALID"}}', false],
+    'no body' => [400, null, false],
 ]);
 
 it('returns null for missing error details', function () {
