@@ -158,7 +158,14 @@ The request builder covers the rest of the Hosted Checkout features:
 | Security and source | `withThreeDSecure()`, `withTransactionSource()` |
 | Payment plans | `withPaymentPlanConstraints()` |
 | Saved cards | `withSaveCard()`, `withTokens()`, `withAgreement()`, `withStoredOnFile()` |
+| Your own data | `withCustomField()`, `withTransactionReference()` |
 | Anything else | `withExtraFields()` |
+
+`withCustomField('branch', 'Male')` sends `order.custom.branch`, which the gateway stores with the order. Keys are 1–99
+characters from `A-Z`, `a-z` and `0-9`, values are 1–250 characters, and a request takes at most 50 fields. Setting a key
+again replaces its value. `withTransactionReference()` sets `transaction.reference` (1–40 characters, no control
+characters), separate from the order's own `withReference()`. Pass `null` to clear it. Both throw `InvalidRequest` on a
+bad value.
 
 ### Show the payment page
 
@@ -248,6 +255,37 @@ Persist each new transaction ID before sending: resending the identical request 
 safe. A declined operation is a `TransactionResponse` with `Result::Failure`, not an exception.
 
 `capture()` also takes updated order data, such as a new shipping address, as its last argument.
+
+The same operations are grouped into clients, if you prefer to pass only one group around:
+
+| Client | Methods |
+|---|---|
+| `$gateway->checkout()` | `initiate()` |
+| `$gateway->sessions()` | `retrieve()`, `update()` |
+| `$gateway->orders()` | `retrieve()`, `retrieveTransaction()`, `capture()`, `refund()`, `void()`, `updateAuthorization()`, `pay()`, `authorize()`, `verify()`, `referral()` |
+| `$gateway->paymentLinks()` | `create()`, `delete()` |
+| `$gateway->tokens()` | `retrieve()`, `saveFromSession()`, `delete()` |
+| `$gateway->agreements()` | `retrieve()` |
+| `$gateway->gateway()` | `check()`, `paymentOptions()`, `planOffers()` |
+
+`$gateway->tokens()->saveFromSession($sessionId)` saves the card details held in a session as a token and returns
+`TokenDetails`. The gateway generates the token unless you pass one as the second argument. For Hosted Checkout,
+`withSaveCard()` and `$gateway->retrieveOrder($orderId)->token()` are the usual route.
+
+`updateSession()` is **experimental**. MIB has not confirmed that Update Session can change a live Hosted Checkout
+session, so don't rely on it in the payment flow:
+
+```php
+use IbnNajjaar\MIBGlobalPay\Core\Requests\SessionUpdate;
+
+$gateway->updateSession($sessionId, new SessionUpdate(
+    orderAmount: Money::of('1300.00', Currency::Mvr),
+    orderDescription: 'Order 123, with delivery',
+    extraFields: [],                                  // merged last; a null value removes a field
+));
+```
+
+It needs at least one field, and throws `InvalidRequest` otherwise.
 
 ### Payment links
 
@@ -382,6 +420,7 @@ The rest is optional:
 | Share a payment link | `MibGlobalPay::startPaymentLink($invoice, now()->addDays(7))->paymentUrl()` |
 | Add to the request | `MibGlobalPay::startCheckout($invoice, customize: fn ($r) => $r->withSaveCard())` |
 | Change what counts as paid | Override `payableState()` on your model |
+| List a model's attempts | `$invoice->mibAttempts()`, a `MorphMany` of `CheckoutAttempt` you can query, such as `$invoice->mibAttempts()->latest()->first()` |
 
 `startCheckout()` reuses a live attempt, retires expired ones, and throws `CheckoutNotAllowed` when a new attempt is unsafe,
 such as when money is already captured or held. `$e->result->reason` says why.
@@ -498,6 +537,17 @@ package's. Then:
    If Checkout.js reports an error, the element shows a message to the payer. To handle a callback yourself, name a global
    JavaScript function with `error`, `cancel`, `complete`, `timeout`, `before-redirect` or `after-redirect`. `cancel` works
    with the Payment Page only, so the component refuses it in the other modes.
+
+   Helpers for building attempts in your own storage:
+   - `MibGlobalPay::attemptOrderId($ref, $n)` gives `{prefix}-{reference}-{n}`. If the cleaned reference is empty or
+     the ID is too long, it gives a random ID instead.
+   - `MibGlobalPay::randomOrderId()` gives a random ID with your prefix. Use it when the readable ID already belongs to
+     another attempt.
+   - `MibGlobalPay::attemptExpiresAt($createdAt)` gives the attempt's creation time plus the checkout timeout
+     (`MIB_CHECKOUT_TIMEOUT`, 1800 s) and the grace period (`MIB_ATTEMPT_GRACE_SECONDS`, 300 s). The package stores this
+     as `expires_at`.
+   - `MibGlobalPay::webhookUrl()` gives the absolute URL of the webhook route, or `null` if no route is registered.
+     `newCheckoutRequest()` uses it for `order.notificationUrl`.
 
    Before a retry, call `MibGlobalPay::attemptGuard()->canStartNewAttempt($payable)` inside the lock. It asks the bank about every
    open attempt. If one is already paid, it refuses with `MoneyCaptured` and dispatches `PaymentCaptured` itself. If a live
