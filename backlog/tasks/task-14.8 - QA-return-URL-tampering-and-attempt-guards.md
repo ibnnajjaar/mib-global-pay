@@ -1,9 +1,11 @@
 ---
 id: TASK-14.8
 title: 'QA: return URL tampering and attempt guards'
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-11-08 11:09'
+updated_date: '2026-11-08 13:18'
 labels:
   - qa
 dependencies:
@@ -53,8 +55,25 @@ The return URL and `resultIndicator` are payer-controlled. The package must deci
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A forged or missing resultIndicator never shows success or records PaymentCaptured for an unpaid order
-- [ ] #2 A paid order shows success even with a forged indicator
-- [ ] #3 A paid invoice refuses a new checkout with a recorded reason, and no attempt is added
-- [ ] #4 Starting checkout twice reuses the live attempt
+- [x] #1 A forged or missing resultIndicator never shows success or records PaymentCaptured for an unpaid order
+- [x] #2 A paid order shows success even with a forged indicator
+- [x] #3 A paid invoice refuses a new checkout with a recorded reason, and no attempt is added
+- [x] #4 Starting checkout twice reuses the live attempt
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Run 2026-11-08 ~18:22 +05:00 with curl through the tunnel (the gateway's Hosted Checkout was down, so no new payment could be made; the already-paid QA-INV-0001-1 from TASK-14.4 stands in for step 3).
+1. Unpaid live attempt QA-INV-0004-1: /mib/return/QA-INV-0004-1?resultIndicator=forged -> 200 'Your payment was not completed.' Attempt still live; PaymentCaptured count unchanged (1, from TASK-14.4).
+2. /mib/return/QA-INV-0004-1 with no query -> 200 'Your payment was not completed.'
+3. Paid order: /mib/return/QA-INV-0001-1?resultIndicator=forged -> 'Thank you. Your payment was successful.' (result comes from the gateway, not the indicator). No new PaymentCaptured (still 1).
+4. /qa/invoices/1/pay for the paid INV-0001 -> refusal page, data-testid refusal-reason = payable_not_payable. Attempt count for INV-0001 stays 1. NOTE: Expected said already_settled or money_captured; the guard checks payableState() first and HasMibPayments::payableState() returns Paid once an attempt is settled, so payable_not_payable is the reason a host using the trait will see. Not a defect; the task's expectation was imprecise.
+5. /qa/invoices/3/pay twice: both 302 to /mib/pay/QA-INV-0003-1 (same signed link); INV-0003 still has only attempt QA-INV-0003-1 (live). The live attempt is reused.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Checked return URL tampering and attempt guards through the tunnel: a forged or missing resultIndicator on an unpaid live order shows 'Your payment was not completed.' with no money event; a forged indicator on the paid QA-INV-0001-1 still shows success (decided by the gateway); a paid invoice is refused with payable_not_payable (HasMibPayments reports Paid before the settlement checks) and gets no new attempt; two checkout starts reuse the same live attempt. Step 3 used the earlier paid order because the gateway's payment page was down.
+<!-- SECTION:FINAL_SUMMARY:END -->
