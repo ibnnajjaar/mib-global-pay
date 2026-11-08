@@ -82,7 +82,9 @@ it('reports NotCaptured without an approved payment or capture', function (array
 })->with([
     'no transactions' => [[]],
     'declined payment' => [[txn('1', 'PAYMENT', 'FAILURE', 'DECLINED')]],
-    'authorization only' => [[txn('a', 'AUTHORIZATION')]],
+    'voided authorization' => [[txn('a', 'AUTHORIZATION'), [...txn('v', 'VOID_AUTHORIZATION'), 'transaction' => ['id' => 'v', 'type' => 'VOID_AUTHORIZATION', 'targetTransactionId' => 'a']]]],
+    'declined authorization' => [[txn('a', 'AUTHORIZATION', 'FAILURE', 'DECLINED')]],
+    'declined verification' => [[txn('a', 'VERIFICATION', 'FAILURE', 'DECLINED')]],
     'authentication only' => [[txn('auth', 'AUTHENTICATION', code: null)]],
     'partially approved' => [[txn('1', 'PAYMENT', 'SUCCESS', 'PARTIALLY_APPROVED')]],
     'unrecognized code' => [[txn('1', 'PAYMENT', 'SUCCESS', 'APPROVED_SOMETHING_NEW')]],
@@ -90,6 +92,14 @@ it('reports NotCaptured without an approved payment or capture', function (array
 
 it('reports NotCaptured even if a total is reported without an approved transaction', function () {
     expect(verify(order([txn('1', 'PAYMENT', 'FAILURE', 'DECLINED')], ['totalCapturedAmount' => 100.0])))->toBe(VerificationStatus::NotCaptured);
+});
+
+it('reports an approved authorization as Authorized', function () {
+    expect(verify(order([txn('a', 'AUTHORIZATION')], ['totalCapturedAmount' => 0])))->toBe(VerificationStatus::Authorized);
+});
+
+it('reports an approved verification as Verified', function () {
+    expect(verify(order([txn('a', 'VERIFICATION')], ['totalCapturedAmount' => 0])))->toBe(VerificationStatus::Verified);
 });
 
 it('treats APPROVED_AUTO as captured only when opted in', function () {

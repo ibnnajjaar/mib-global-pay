@@ -35,6 +35,12 @@ enum TransactionType: string implements GatewayEnum
         return $this === self::Payment || $this === self::Capture;
     }
 
+    /** AUTHORIZATION or VERIFICATION: no money moves, but the attempt has an outcome to report. */
+    public function isAuthorizationOrVerification(): bool
+    {
+        return $this === self::Authorization || $this === self::Verification;
+    }
+
     /** Any of VOID_AUTHORIZATION, VOID_CAPTURE, VOID_PAYMENT, VOID_REFUND. */
     public function isVoid(): bool
     {

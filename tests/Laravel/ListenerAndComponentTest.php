@@ -15,7 +15,6 @@ use IbnNajjaar\MIBGlobalPay\Laravel\Jobs\ReverseCapture;
 use IbnNajjaar\MIBGlobalPay\Laravel\Facades\MibGlobalPay;
 use IbnNajjaar\MIBGlobalPay\Tests\Support\GatewayHarness;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\CheckoutRequest;
-use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
 use IbnNajjaar\MIBGlobalPay\Laravel\Outcome\OutcomeProcessor;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\InteractionOperation;
 
@@ -28,7 +27,7 @@ function doubleCapture(): void
     app(OutcomeProcessor::class)->process($resolved, Source::Webhook);
 }
 
-it('does not auto-reverse a double capture by default', function () {
+it('does not auto-reverse a double capture when turned off', function () {
     Bus::fake([ReverseCapture::class]);
 
     doubleCapture();
@@ -81,7 +80,7 @@ it('renders the checkout redirect component', function () {
     $html = Blade::render('<x-mib-global-pay::checkout :session="$id" />', ['id' => 'SESSION0002899787259G30902270H6']);
 
     expect($html)->toContain('https://test-mib.mtf.gateway.mastercard.com/static/checkout/checkout.min.js')
-        ->toContain("id: 'SESSION0002899787259G30902270H6'")
+        ->toContain('id:"SESSION0002899787259G30902270H6"')
         ->toContain('Checkout.showPaymentPage()');
 });
 
@@ -100,14 +99,14 @@ it('sets only the error callback by default, with a message the payer can see', 
     expect($html)->toContain('data-error="mibGlobalPayError"')
         ->not->toContain('data-cancel')
         ->toContain('The payment page could not be loaded')
-        ->toContain("typeof Checkout === 'undefined'");
+        ->toContain('typeof Checkout==="undefined"');
 });
 
 it('renders the Embedded Page in its own element', function () {
     $html = Blade::render('<x-mib-global-pay::checkout session="S1" mode="embedded" id="pay-here" />');
 
     expect($html)->toContain('id="pay-here"')
-        ->toContain("Checkout.showEmbeddedPage('#' + CSS.escape('pay-here'))")
+        ->toContain('Checkout.showEmbeddedPage("#"+CSS.escape("pay-here"))')
         ->not->toContain('Checkout.showPaymentPage()');
 });
 
@@ -125,25 +124,24 @@ it('passes host callbacks to Checkout.js', function () {
 it('refuses a bad checkout component setup', function (string $component, string $message) {
     expect(fn () => Blade::render($component))->toThrow($message);
 })->with([
-    'unknown mode' => ['<x-mib-global-pay::checkout session="S1" mode="modal" />', 'Checkout mode'],
+    'unknown mode' => ['<x-mib-global-pay::checkout session="S1" mode="popup" />', 'Checkout mode'],
     'cancel on the Embedded Page' => ['<x-mib-global-pay::checkout session="S1" mode="embedded" cancel="onCancel" />', 'Payment Page only'],
     'callback that is not a function name' => ['<x-mib-global-pay::checkout session="S1" error="alert(1)" />', 'global JavaScript function'],
 ]);
 
-it('refuses checkouts the outcome pipeline cannot follow, but allows them on the gateway', function (InteractionOperation $operation) {
-    $fake = MibGlobalPay::fake();
-    $request = CheckoutRequest::create('O-1', Money::of('10', Currency::Mvr), 'M', 'https://x.mv/r')->withoutWebhook()->withOperation($operation);
+it('shows the Embedded Page in a modal without host JavaScript', function () {
+    $html = Blade::render('<x-mib-global-pay::checkout session="S1" mode="modal" />');
 
-    expect(fn () => MibGlobalPay::initiateCheckout($request))->toThrow(InvalidRequest::class, 'PURCHASE only');
-    $fake->assertCheckoutNotInitiated();
-
-    expect(MibGlobalPay::gateway()->checkout()->initiate($request)->sessionId)->not->toBe('');
-})->with([[InteractionOperation::Authorize], [InteractionOperation::Verify], [InteractionOperation::None]]);
-
-it('starts a PURCHASE checkout through the facade', function () {
-    $fake = MibGlobalPay::fake();
-
-    MibGlobalPay::initiateCheckout(CheckoutRequest::create('O-1', Money::of('10', Currency::Mvr), 'M', 'https://x.mv/r')->withoutWebhook());
-
-    $fake->assertCheckoutInitiated();
+    expect($html)->toContain('<dialog id="mib-global-pay-checkout-dialog">')
+        ->toContain('dialog.showModal()')
+        ->toContain('sessionStorage.clear()')
+        ->toContain('Checkout.showEmbeddedPage("#"+CSS.escape("mib-global-pay-checkout"),openDialog)');
 });
+
+it('sends every operation through the facade', function (InteractionOperation $operation) {
+    $fake = MibGlobalPay::fake();
+
+    MibGlobalPay::initiateCheckout(CheckoutRequest::create('O-1', Money::of('10', Currency::Mvr), 'M', 'https://x.mv/r')->withoutWebhook()->withOperation($operation));
+
+    $fake->assertCheckoutInitiated(fn (CheckoutRequest $r): bool => $r->operation() === $operation);
+})->with([[InteractionOperation::Purchase], [InteractionOperation::Authorize], [InteractionOperation::Verify], [InteractionOperation::None]]);

@@ -13,11 +13,13 @@ use IbnNajjaar\MIBGlobalPay\Core\Enums\TransactionType;
 it('allows only the documented attempt transitions', function () {
     $allowed = [
         'created' => ['live', 'failed', 'superseded'],
-        'live' => ['captured', 'expired', 'failed', 'superseded'],
-        'expired' => ['captured', 'failed', 'superseded'],
-        'superseded' => ['captured'],
+        'live' => ['captured', 'authorized', 'verified', 'expired', 'failed', 'superseded'],
+        'authorized' => ['captured', 'failed', 'superseded'],
+        'expired' => ['captured', 'authorized', 'verified', 'failed', 'superseded'],
+        'superseded' => ['captured', 'authorized'],
         'captured' => [],
-        'failed' => [],
+        'verified' => [],
+        'failed' => ['captured'],
     ];
 
     foreach (AttemptState::cases() as $from) {
@@ -30,7 +32,7 @@ it('allows only the documented attempt transitions', function () {
 it('knows which attempts may still be paid', function () {
     $open = array_filter(AttemptState::cases(), fn (AttemptState $s) => $s->mayStillBePaid());
 
-    expect(array_values($open))->toBe([AttemptState::Created, AttemptState::Live, AttemptState::Expired]);
+    expect(array_values($open))->toBe([AttemptState::Created, AttemptState::Live, AttemptState::Authorized, AttemptState::Expired]);
 });
 
 it('treats only Open and Frozen payables as payable', function () {

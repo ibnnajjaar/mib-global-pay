@@ -21,6 +21,16 @@ final class NotificationFactory
         return self::make($orderId, 'FAILED', Money::ofMinor(0, $amount->currency), OrderFactory::transaction($transactionId, 'PAYMENT', $amount, 'FAILURE', 'DECLINED'), $notificationId);
     }
 
+    public static function authorized(string $orderId, Money $amount, string $transactionId = '1', ?string $notificationId = null): FakeNotification
+    {
+        return self::make($orderId, 'AUTHORIZED', Money::ofMinor(0, $amount->currency), OrderFactory::transaction($transactionId, 'AUTHORIZATION', $amount), $notificationId);
+    }
+
+    public static function verified(string $orderId, Money $amount, string $transactionId = '1', ?string $notificationId = null): FakeNotification
+    {
+        return self::make($orderId, 'VERIFIED', Money::ofMinor(0, $amount->currency), OrderFactory::transaction($transactionId, 'VERIFICATION', null), $notificationId);
+    }
+
     public static function refund(string $orderId, Money $amount, string $transactionId = 'refund-1', string $targetTransactionId = '1', ?string $notificationId = null): FakeNotification
     {
         return self::make($orderId, 'REFUNDED', $amount, OrderFactory::transaction($transactionId, 'REFUND', $amount, target: $targetTransactionId), $notificationId);

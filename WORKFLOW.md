@@ -100,7 +100,7 @@ the record, or a second worker arriving before it, can repeat the event, so list
 `PaymentPending` and `PaymentFailed` are advisory: at most once per notification, and each time from a trigger that has
 no notification, so make their listeners idempotent too.
 
-With `MIB_AUTO_REVERSE_DOUBLE_CAPTURE` on (off by default), a `DoubleCapture` also queues a reversal: a void,
+With `MIB_AUTO_REVERSE_DOUBLE_CAPTURE` on (the default), a `DoubleCapture` also queues a reversal: a void,
 falling back to a refund.
 
 ## Still unconfirmed by MIB

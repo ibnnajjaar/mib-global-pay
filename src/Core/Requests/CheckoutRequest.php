@@ -74,6 +74,60 @@ final class CheckoutRequest
 
     private ?string $transactionReference = null;
 
+    private ?Contact $customer = null;
+
+    private ?string $customerTaxRegistrationId = null;
+
+    private ?Address $billingAddress = null;
+
+    private ?Address $shippingAddress = null;
+
+    private ?Contact $shippingContact = null;
+
+    private ?SameAsBilling $shippingSameAsBilling = null;
+
+    /** @var list<LineItem> */
+    private array $lineItems = [];
+
+    private ?string $statementDescriptorName = null;
+
+    private ?string $statementDescriptorPhone = null;
+
+    private ?Address $statementDescriptorAddress = null;
+
+    /** @var array<string, mixed> */
+    private array $orderDetails = [];
+
+    /** @var array<string, mixed> */
+    private array $airline = [];
+
+    /** @var array<string, mixed> */
+    private array $cruise = [];
+
+    /** @var list<string> */
+    private array $supportedPaymentPlans = [];
+
+    private ?int $paymentPlanPayments = null;
+
+    private ?int $paymentPlanDeferralPeriod = null;
+
+    private bool $saveCard = false;
+
+    /** @var list<string> */
+    private array $tokens = [];
+
+    private ?Agreement $agreement = null;
+
+    private ?StoredOnFile $storedOnFile = null;
+
+    private bool $paymentLink = false;
+
+    private ?\DateTimeInterface $paymentLinkExpiresAt = null;
+
+    private ?int $paymentLinkAttempts = null;
+
+    private ?string $paymentLinkErrorUrl = null;
+
     /** @var array<string, mixed> */
     private array $extraFields = [];
 
@@ -107,8 +161,7 @@ final class CheckoutRequest
     }
 
     /**
-     * A VERIFY checkout, the only operation that may send a zero amount. It moves no money, so it
-     * must not go through verifyCapture(), AttemptGuard or PaymentOutcome (see withOperation()).
+     * A VERIFY checkout, the only operation that may send a zero amount. It moves no money.
      *
      * @param string $orderId      a new, never reused gateway order ID (1-40 characters)
      * @param string $merchantName shown to the payer (1-40 characters)
@@ -134,12 +187,9 @@ final class CheckoutRequest
     }
 
     /**
-     * interaction.operation. Defaults to PURCHASE.
-     *
-     * verifyCapture(), AttemptGuard and the Laravel outcome pipeline only understand money captured
-     * in full, so they support PURCHASE only. AUTHORIZE, VERIFY and NONE leave no captured total, so
-     * a successful one reads as NotCaptured. Handle these flows yourself, from the gateway's order
-     * and transaction responses.
+     * interaction.operation. Defaults to PURCHASE. verifyCapture() reports the result of each one:
+     * AUTHORIZE gives Authorized, VERIFY gives Verified, and NONE stays NotCaptured because no
+     * transaction is created.
      */
     public function withOperation(InteractionOperation $operation): self
     {
@@ -366,6 +416,193 @@ final class CheckoutRequest
     }
 
     /**
+     * customer.*: the payer. customer.email also drives Click to Pay and payer email notifications.
+     *
+     * @throws InvalidRequest
+     */
+    public function withCustomer(Contact $customer, ?string $taxRegistrationId = null): self
+    {
+        return $this->copy(function (self $c) use ($customer, $taxRegistrationId): void {
+            $c->customer = $customer;
+            $c->customerTaxRegistrationId = $taxRegistrationId;
+        });
+    }
+
+    /** billing.address.* */
+    public function withBillingAddress(Address $address): self
+    {
+        return $this->copy(fn (self $c) => $c->billingAddress = $address);
+    }
+
+    /** shipping.address.* and shipping.contact.* */
+    public function withShipping(?Address $address = null, ?Contact $contact = null, ?SameAsBilling $sameAsBilling = null): self
+    {
+        return $this->copy(function (self $c) use ($address, $contact, $sameAsBilling): void {
+            $c->shippingAddress = $address;
+            $c->shippingContact = $contact;
+            $c->shippingSameAsBilling = $sameAsBilling;
+        });
+    }
+
+    /**
+     * order.item[n]: what is being bought, including approved healthcare purchases. The Hosted
+     * Checkout guide describes this field, but the v100 Initiate Checkout reference does not list
+     * it, so try it on the test gateway first.
+     */
+    public function withLineItems(LineItem ...$items): self
+    {
+        return $this->copy(fn (self $c) => $c->lineItems = array_values($items));
+    }
+
+    /** order.statementDescriptor.*: how the payment appears on the payer's statement. */
+    public function withStatementDescriptor(?string $name = null, ?string $phone = null, ?Address $address = null): self
+    {
+        return $this->copy(function (self $c) use ($name, $phone, $address): void {
+            $c->statementDescriptorName = $name;
+            $c->statementDescriptorPhone = $phone;
+            $c->statementDescriptorAddress = $address;
+        });
+    }
+
+    /**
+     * Level 2 and Level 3 order data, for better interchange rates on business, corporate and
+     * purchase cards.
+     *
+     * @throws InvalidRequest
+     */
+    public function withOrderDetails(
+        ?string $customerReference = null,
+        ?string $invoiceNumber = null,
+        ?Money $taxAmount = null,
+        ?Money $shippingAndHandlingAmount = null,
+        ?Money $dutyAmount = null,
+        ?string $taxRegistrationId = null,
+    ): self {
+        return $this->copy(fn (self $c) => $c->orderDetails = [
+            'customerReference' => $customerReference,
+            'invoiceNumber' => $invoiceNumber,
+            'taxAmount' => $taxAmount?->toDecimal(),
+            'shippingAndHandlingAmount' => $shippingAndHandlingAmount?->toDecimal(),
+            'dutyAmount' => $dutyAmount?->toDecimal(),
+            'taxRegistrationId' => $taxRegistrationId,
+        ]);
+    }
+
+    /**
+     * airline.*: flights, passengers, tickets and itineraries, in the gateway's own field names.
+     *
+     * @param array<string, mixed> $airline
+     */
+    public function withAirlineData(array $airline): self
+    {
+        return $this->copy(fn (self $c) => $c->airline = $airline);
+    }
+
+    /**
+     * cruise.*: cruise, ship, passengers and travel agent, in the gateway's own field names.
+     *
+     * @param array<string, mixed> $cruise
+     */
+    public function withCruiseData(array $cruise): self
+    {
+        return $this->copy(fn (self $c) => $c->cruise = $cruise);
+    }
+
+    /**
+     * constraints.paymentPlans.*: narrows the installment plans offered for this transaction.
+     *
+     * @param list<string> $supported plan identifiers
+     *
+     * @throws InvalidRequest
+     */
+    public function withPaymentPlanConstraints(array $supported = [], ?int $numberOfPayments = null, ?int $deferralPeriod = null): self
+    {
+        if ($numberOfPayments !== null && ($numberOfPayments < 1 || $numberOfPayments > 99)) {
+            throw new InvalidRequest('Number of payments must be between 1 and 99');
+        }
+
+        if ($deferralPeriod !== null && ($deferralPeriod < 0 || $deferralPeriod > 99)) {
+            throw new InvalidRequest('Deferral period must be between 0 and 99');
+        }
+
+        foreach ($supported as $plan) {
+            Validate::identifier($plan, 'Payment plan');
+        }
+
+        return $this->copy(function (self $c) use ($supported, $numberOfPayments, $deferralPeriod): void {
+            $c->supportedPaymentPlans = $supported;
+            $c->paymentPlanPayments = $numberOfPayments;
+            $c->paymentPlanDeferralPeriod = $deferralPeriod;
+        });
+    }
+
+    /**
+     * interaction.saveCardForCredentialOnFile: shows the payer a consent checkbox to save the card.
+     * If they agree, read the token from OrderResponse::token().
+     */
+    public function withSaveCard(bool $save = true): self
+    {
+        return $this->copy(fn (self $c) => $c->saveCard = $save);
+    }
+
+    /**
+     * interaction.tokens[n]: saved cards to offer the payer.
+     *
+     * @throws InvalidRequest
+     */
+    public function withTokens(string ...$tokens): self
+    {
+        foreach ($tokens as $token) {
+            if (preg_match('/^[0-9A-Za-z]{1,40}$/', $token) !== 1) {
+                throw new InvalidRequest('Token must be 1-40 characters from 0-9, a-z and A-Z');
+            }
+        }
+
+        return $this->copy(fn (self $c) => $c->tokens = array_values($tokens));
+    }
+
+    /** agreement.*: the payer's agreement to later payments on this card. */
+    public function withAgreement(Agreement $agreement): self
+    {
+        return $this->copy(fn (self $c) => $c->agreement = $agreement);
+    }
+
+    /** sourceOfFunds.provided.card.storedOnFile */
+    public function withStoredOnFile(StoredOnFile $storedOnFile): self
+    {
+        return $this->copy(fn (self $c) => $c->storedOnFile = $storedOnFile);
+    }
+
+    /**
+     * Makes this a Payment Link request (checkoutMode PAYMENT_LINK), sent with the payment link
+     * client. The gateway defaults to 3 months and 25 attempts. It needs AUTHORIZE or PURCHASE, an
+     * order description and a merchant URL. On an error, the gateway sends the payer to $errorUrl
+     * with errorCode and errorDescription.
+     *
+     * @throws InvalidRequest
+     */
+    public function withPaymentLink(?\DateTimeInterface $expiresAt = null, ?int $allowedAttempts = null, ?string $errorUrl = null): self
+    {
+        if ($allowedAttempts !== null && $allowedAttempts < 1) {
+            throw new InvalidRequest('Payment link attempts must be at least 1');
+        }
+
+        $errorUrl = Validate::urlShape($errorUrl, 'Payment link error URL');
+
+        return $this->copy(function (self $c) use ($expiresAt, $allowedAttempts, $errorUrl): void {
+            $c->paymentLink = true;
+            $c->paymentLinkExpiresAt = $expiresAt;
+            $c->paymentLinkAttempts = $allowedAttempts;
+            $c->paymentLinkErrorUrl = $errorUrl;
+        });
+    }
+
+    public function isPaymentLink(): bool
+    {
+        return $this->paymentLink;
+    }
+
+    /**
      * Escape hatch for Initiate Checkout fields not modelled yet. Deep-merged last, so it
      * overrides the builder's fields; a null value removes a field.
      *
@@ -406,8 +643,14 @@ final class CheckoutRequest
             throw new InvalidRequest('Set a notification URL with withNotificationUrl(), or call withoutWebhook() explicitly');
         }
 
+        if ($this->paymentLink) {
+            $this->validatePaymentLink();
+        }
+
         $body = [
             'apiOperation' => 'INITIATE_CHECKOUT',
+            'checkoutMode' => $this->paymentLink ? 'PAYMENT_LINK' : null,
+            'paymentLink' => $this->paymentLinkFields($config),
             'interaction' => [
                 'operation' => $this->operation->value,
                 'merchant' => [
@@ -434,6 +677,8 @@ final class CheckoutRequest
                     'paymentTerms' => $this->paymentTermsDisplay?->value,
                 ],
                 'action' => ['3DSecure' => $this->threeDSecure?->value],
+                'saveCardForCredentialOnFile' => $this->saveCard ? 'PAYER_INITIATED_PAYMENTS' : null,
+                'tokens' => $this->tokens,
             ],
             'order' => [
                 'id' => $this->orderId,
@@ -443,7 +688,29 @@ final class CheckoutRequest
                 'reference' => $this->reference,
                 'notificationUrl' => Validate::url($this->notificationUrl, 'Notification URL', $config),
                 'custom' => $this->customFields,
+                'item' => array_map(fn (LineItem $item): array => $item->toArray(), $this->lineItems),
+                'statementDescriptor' => [
+                    'name' => $this->statementDescriptorName,
+                    'phone' => $this->statementDescriptorPhone,
+                    'address' => $this->statementDescriptorAddress?->toArray(),
+                ],
+                ...$this->orderDetails,
             ],
+            'customer' => [...($this->customer?->toArray() ?? []), 'taxRegistrationId' => $this->customerTaxRegistrationId],
+            'billing' => ['address' => $this->billingAddress?->toArray()],
+            'shipping' => [
+                'address' => [...($this->shippingAddress?->toArray() ?? []), 'sameAsBilling' => $this->shippingSameAsBilling?->value],
+                'contact' => $this->shippingContact?->toArray(),
+            ],
+            'airline' => $this->airline,
+            'cruise' => $this->cruise,
+            'constraints' => ['paymentPlans' => [
+                'supported' => $this->supportedPaymentPlans,
+                'numberOfPayments' => $this->paymentPlanPayments,
+                'deferralPeriod' => $this->paymentPlanDeferralPeriod,
+            ]],
+            'agreement' => $this->agreement?->toArray(),
+            'sourceOfFunds' => ['provided' => ['card' => ['storedOnFile' => $this->storedOnFile?->value]]],
             'transaction' => [
                 'reference' => $this->transactionReference,
                 'source' => $this->transactionSource?->value,
@@ -452,6 +719,44 @@ final class CheckoutRequest
 
         /** @var array<string, mixed> */
         return RequestBody::withoutNulls(RequestBody::merge($body, $this->extraFields));
+    }
+
+    /** @throws InvalidRequest */
+    private function validatePaymentLink(): void
+    {
+        if (! in_array($this->operation, [InteractionOperation::Authorize, InteractionOperation::Purchase], true)) {
+            throw new InvalidRequest('A payment link needs the AUTHORIZE or PURCHASE operation');
+        }
+
+        if ($this->merchantUrl === null) {
+            throw new InvalidRequest('A payment link needs a merchant URL: call withMerchantDetails(url: ...)');
+        }
+
+        if ($this->description === null) {
+            throw new InvalidRequest('A payment link needs an order description: call withDescription()');
+        }
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     *
+     * @throws InvalidRequest
+     */
+    private function paymentLinkFields(GatewayConfig $config): ?array
+    {
+        if (! $this->paymentLink) {
+            return null;
+        }
+
+        $expires = $this->paymentLinkExpiresAt === null
+            ? null
+            : \DateTimeImmutable::createFromInterface($this->paymentLinkExpiresAt)->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.v\Z');
+
+        return [
+            'expiryDateTime' => $expires,
+            'numberOfAllowedAttempts' => $this->paymentLinkAttempts,
+            'errorUrl' => Validate::url($this->paymentLinkErrorUrl, 'Payment link error URL', $config),
+        ];
     }
 
     /**

@@ -6,31 +6,28 @@ namespace IbnNajjaar\MIBGlobalPay\Laravel\View\Components;
 
 use Illuminate\View\Component;
 use Illuminate\Contracts\View\View;
+use IbnNajjaar\MIBGlobalPay\Core\Checkout\CheckoutJs;
 use IbnNajjaar\MIBGlobalPay\Laravel\Support\Settings;
 use IbnNajjaar\MIBGlobalPay\Core\Config\GatewayConfig;
+use IbnNajjaar\MIBGlobalPay\Core\Checkout\CheckoutDisplay;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
 
 /**
  * <x-mib-global-pay::checkout :session="$sessionId" />
  *
- * Renders Checkout.js and starts the payment. From API v67, configure() takes only the session;
- * everything else is set in Initiate Checkout.
- *
- * mode is "payment" (redirect to the Payment Page, the default) or "embedded" (show the Embedded
- * Page inside this element). error, cancel, complete, timeout, before-redirect and after-redirect
- * each name a global JavaScript function for that Checkout.js callback. cancel works with the
- * Payment Page only, so it is refused in embedded mode.
+ * Renders Checkout.js and starts the payment. mode is "payment" (redirect to the Payment Page, the
+ * default), "embedded" (inside this element) or "modal" (in a dialog). error, cancel, complete,
+ * timeout, before-redirect and after-redirect each name a global JavaScript function for that
+ * callback. cancel works with the Payment Page only, so other modes refuse it.
  */
 final class Checkout extends Component
 {
-    private const string CALLBACK_NAME = '/^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/';
-
     public readonly string $scriptUrl;
 
-    public readonly bool $embedded;
+    public readonly CheckoutDisplay $display;
 
-    /** @var array<string, string> Checkout.js callback name => global function name */
-    public readonly array $callbacks;
+    /** @var array<string, string|null> */
+    private readonly array $callbacks;
 
     /**
      * @throws InvalidRequest
@@ -48,26 +45,24 @@ final class Checkout extends Component
         ?string $beforeRedirect = null,
         ?string $afterRedirect = null,
     ) {
-        if (! in_array($mode, ['payment', 'embedded'], true)) {
-            throw new InvalidRequest('Checkout mode must be "payment" or "embedded"');
-        }
-
-        if ($mode === 'embedded' && $cancel !== null) {
-            throw new InvalidRequest('The cancel callback works with the Payment Page only, not the Embedded Page');
-        }
-
+        $this->display = CheckoutDisplay::tryFrom($mode)
+            ?? throw new InvalidRequest('Checkout mode must be "payment", "embedded" or "modal"');
         $this->scriptUrl = $scriptUrl
             ?? $settings->checkoutJsUrl()
-            ?? 'https://' . $config->host . '/static/checkout/checkout.min.js';
-        $this->embedded = $mode === 'embedded';
-        $this->callbacks = self::validated([
-            'error' => $error ?? 'mibGlobalPayError',
-            'cancel' => $cancel,
-            'complete' => $complete,
-            'timeout' => $timeout,
-            'beforeRedirect' => $beforeRedirect,
-            'afterRedirect' => $afterRedirect,
-        ]);
+            ?? CheckoutJs::defaultScriptUrl($config);
+        $this->callbacks = ['error' => $error, 'cancel' => $cancel, 'complete' => $complete, 'timeout' => $timeout, 'beforeRedirect' => $beforeRedirect, 'afterRedirect' => $afterRedirect];
+
+        $this->checkoutJs('mib-global-pay-checkout'); // refuse a bad setup as soon as the component is built
+    }
+
+    /**
+     * @throws InvalidRequest
+     */
+    public function checkoutJs(string $targetId): CheckoutJs
+    {
+        $message = __('The payment page could not be loaded. Please try again.');
+
+        return new CheckoutJs($this->session, $this->scriptUrl, $this->display, $targetId, $this->callbacks, is_string($message) ? $message : '');
     }
 
     public function render(): View
@@ -76,25 +71,5 @@ final class Checkout extends Component
         $name = 'mib-global-pay::components.checkout';
 
         return view($name);
-    }
-
-    /**
-     * @param array<string, string|null> $callbacks
-     *
-     * @return array<string, string>
-     *
-     * @throws InvalidRequest
-     */
-    private static function validated(array $callbacks): array
-    {
-        $names = array_filter($callbacks, fn (?string $name): bool => $name !== null);
-
-        foreach ($names as $callback => $name) {
-            if (preg_match(self::CALLBACK_NAME, $name) !== 1) {
-                throw new InvalidRequest("The {$callback} callback must name a global JavaScript function");
-            }
-        }
-
-        return $names;
     }
 }

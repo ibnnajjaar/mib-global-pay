@@ -21,6 +21,9 @@ enum GuardRefusal: string
     /** The gateway reports money captured on an earlier attempt (run the capture pipeline). */
     case MoneyCaptured = 'money_captured';
 
+    /** An earlier attempt's authorization is holding the payer's funds. Capture or void it first. */
+    case AuthorizationHeld = 'authorization_held';
+
     /** The gateway reports an earlier attempt as pending; ask again later. */
     case VerificationPending = 'verification_pending';
 

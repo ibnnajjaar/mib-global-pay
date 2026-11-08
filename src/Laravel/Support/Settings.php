@@ -76,7 +76,17 @@ final readonly class Settings
 
     public function autoReverseDoubleCapture(): bool
     {
-        return $this->bool('double_capture.auto_reverse', false);
+        return $this->bool('double_capture.auto_reverse', true);
+    }
+
+    public function reviewAfterSeconds(): int
+    {
+        return $this->int('attempts.review_after_seconds', 86400);
+    }
+
+    public function lateCaptureWatchSeconds(): int
+    {
+        return $this->int('attempts.late_capture_watch_seconds', 604800);
     }
 
     public function expiryGraceSeconds(): int
@@ -87,6 +97,55 @@ final readonly class Settings
     public function checkoutTimeoutSeconds(): int
     {
         return $this->int('checkout.timeout_seconds', 1800);
+    }
+
+    public function managedAttempts(): bool
+    {
+        return $this->bool('checkout.managed_attempts', true);
+    }
+
+    public function checkoutRoutes(): bool
+    {
+        return $this->bool('checkout.routes.enabled', true);
+    }
+
+    public function checkoutRoutePrefix(): string
+    {
+        return $this->string('checkout.routes.prefix') ?? 'mib';
+    }
+
+    /** @return list<string> */
+    public function checkoutRouteMiddleware(): array
+    {
+        $middleware = $this->config->get('mib-global-pay.checkout.routes.middleware', ['web']);
+
+        return is_array($middleware) ? array_values(array_filter($middleware, is_string(...))) : ['web'];
+    }
+
+    public function checkoutMode(): string
+    {
+        return $this->string('checkout.mode') ?? 'payment';
+    }
+
+    public function checkoutCompletedUrl(): ?string
+    {
+        return $this->string('checkout.completed_url');
+    }
+
+    public function merchantName(): string
+    {
+        return $this->string('checkout.merchant_name')
+            ?? throw new ConfigurationException('Set the merchant name shown to the payer (MIB_MERCHANT_NAME)');
+    }
+
+    public function merchantUrl(): ?string
+    {
+        return $this->string('checkout.merchant_url');
+    }
+
+    public function merchantLogoUrl(): ?string
+    {
+        return $this->string('checkout.merchant_logo_url');
     }
 
     public function checkoutJsUrl(): ?string

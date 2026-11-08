@@ -6,10 +6,13 @@ namespace IbnNajjaar\MIBGlobalPay\Core\Contracts;
 
 use IbnNajjaar\MIBGlobalPay\Core\Money\Money;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\OrderClient;
+use IbnNajjaar\MIBGlobalPay\Core\Clients\TokenClient;
 use IbnNajjaar\MIBGlobalPay\Core\Config\GatewayConfig;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\GatewayClient;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\SessionClient;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\CheckoutClient;
+use IbnNajjaar\MIBGlobalPay\Core\Clients\AgreementClient;
+use IbnNajjaar\MIBGlobalPay\Core\Clients\PaymentLinkClient;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\GatewayException;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\MalformedPayload;
@@ -59,4 +62,10 @@ interface Gateway
     public function orders(): OrderClient;
 
     public function gateway(): GatewayClient;
+
+    public function tokens(): TokenClient;
+
+    public function paymentLinks(): PaymentLinkClient;
+
+    public function agreements(): AgreementClient;
 }

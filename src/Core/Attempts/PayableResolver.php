@@ -13,7 +13,10 @@ interface PayableResolver
     public function resolveAttempt(string $gatewayOrderId): ?ResolvedAttempt;
 
     /**
-     * Attempts in state Created or Live, or Expired without a final verified status, for reconciliation.
+     * Attempts in state Created, Live or Authorized, or Expired without a final verified status, for
+     * reconciliation. Also return attempts you retired recently (Superseded, or Failed after a person
+     * confirmed them unpaid), so a late charge is noticed even if its webhook is lost. The pipeline
+     * only reports money on those.
      *
      * @return iterable<ResolvedAttempt>
      */

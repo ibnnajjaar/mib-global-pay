@@ -34,7 +34,7 @@ Facts about the gateway in this document come from the MIB test-gateway document
 
 ### Non-goals
 
-- The package will **not** own the host's Payment or Invoice models, migrations or business rules. ISIMS keeps those.
+- The package will **not** own the host's Payment or Invoice models or business rules. ISIMS keeps those. It offers optional storage for checkout attempts (`HasMibPayments`, `CheckoutAttempt`), and a host can keep its own by binding a `PayableResolver`.
 - It will not handle direct card capture (PCI scope). Hosted Checkout stays the only payer flow.
 - It will not support Laravel < 12 or PHP < 8.4.
 
@@ -158,7 +158,7 @@ The v100 Retrieve Order reference (`transaction[n].response.gatewayCode`) lists 
 | `APPROVED_PENDING_SETTLEMENT` | "Transaction Approved - pending batch settlement" | approved |
 | `APPROVED_AUTO` | "automatically approved by the gateway. it was not submitted to the acquirer" | **not** money received by default. Opt in with config `approval.accept_approved_auto` / `MIB_ACCEPT_APPROVED_AUTO=false` (decided, §12 Q15). |
 | `PARTIALLY_APPROVED` | "approved for a lesser amount than requested. The approved amount is returned in order.totalAuthorizedAmount" | not approved. `verifyCapture` reports `AmountMismatch` if money moved. |
-| `PENDING`, `SUBMITTED`, `DEFERRED_TRANSACTION_RECEIVED`, `UNKNOWN`, `TIMED_OUT` | in progress or unknown | `Pending`. Never paid, never failed: ask again later. |
+| `PENDING`, `SUBMITTED`, `DEFERRED_TRANSACTION_RECEIVED`, `UNKNOWN`, `TIMED_OUT` | in progress or unknown | `Pending`. Never paid, never failed: ask again later. After `MIB_REVIEW_AFTER_SECONDS`, `PaymentNeedsReview` asks a person to decide. |
 
 The full v100 enum is: ABORTED, ACQUIRER_SYSTEM_ERROR, APPROVED, APPROVED_AUTO, APPROVED_PENDING_SETTLEMENT, AUTHENTICATION_FAILED, AUTHENTICATION_IN_PROGRESS, BALANCE_AVAILABLE, BALANCE_UNKNOWN, BLOCKED, CANCELLED, DECLINED, DECLINED_AVS, DECLINED_AVS_CSC, DECLINED_CSC, DECLINED_DO_NOT_CONTACT, DECLINED_INVALID_PIN, DECLINED_PAYMENT_PLAN, DECLINED_PIN_REQUIRED, DEFERRED_TRANSACTION_RECEIVED, DUPLICATE_BATCH, EXCEEDED_RETRY_LIMIT, EXPIRED_CARD, INSUFFICIENT_FUNDS, INVALID_CSC, LOCK_FAILURE, NOT_ENROLLED_3D_SECURE, NOT_SUPPORTED, NO_BALANCE, PARTIALLY_APPROVED, PENDING, REFERRED, SUBMITTED, SYSTEM_ERROR, TIMED_OUT, UNKNOWN, UNSPECIFIED_FAILURE.
 
@@ -434,7 +434,7 @@ It is auto-discovered through `extra.laravel.providers`. The core works without 
 - `mib:prune-notifications --days=30` (minimum 4). It keeps money-event delivery records (§12 Q23).
 
 **Double capture and checkout page:**
-- `Listeners\AutoReverseDoubleCapture` is always registered but does nothing unless `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=true`. When enabled, it queues `Jobs\ReverseCapture` after commit. That job voids, then refunds, with transaction IDs derived from the order and capture, so a retry or a second job resends identical requests. It sets its own retries (6 attempts, about 45 minutes) for `Unconfirmed` and exceptions, then logs an error and dispatches `ReversalUnconfirmed`. A definitely failed refund dispatches `ReversalFailed` without retrying.
+- `Listeners\AutoReverseDoubleCapture` is always registered but does nothing when `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=false`; it is on by default. When enabled, it queues `Jobs\ReverseCapture` after commit. That job voids, then refunds, with transaction IDs derived from the order and capture, so a retry or a second job resends identical requests. It sets its own retries (6 attempts, about 45 minutes) for `Unconfirmed` and exceptions, then logs an error and dispatches `ReversalUnconfirmed`. A definitely failed refund dispatches `ReversalFailed` without retrying.
 - Blade `<x-mib-global-pay::checkout :session="$id" />` renders the Checkout.js page.
 
 **Pipeline choices (decided after stage 6):**
@@ -467,7 +467,7 @@ It is auto-discovered through `extra.laravel.providers`. The core works without 
 | `currencies` | `MIB_CURRENCIES` (default `MVR`) | Allow-list over the ISO `Currency` enum (Q5) |
 | `order_prefix` | `MIB_ORDER_PREFIX` | Prefix for attempt order IDs (§6.5) |
 | `approval.accept_approved_auto` | `MIB_ACCEPT_APPROVED_AUTO` (default `false`) | Q15 |
-| `double_capture.auto_reverse` | `MIB_AUTO_REVERSE_DOUBLE_CAPTURE` (default `false`) | Enables the `AutoReverseDoubleCapture` listener (Q19) |
+| `double_capture.auto_reverse` | `MIB_AUTO_REVERSE_DOUBLE_CAPTURE` (default `true`) | Enables the `AutoReverseDoubleCapture` listener (Q19) |
 | `allow_insecure_urls` | `MIB_ALLOW_INSECURE_URLS` (default `false`) | Local development only (Q7) |
 
 The provider binds `MibGateway` as a singleton and the `MibGlobalPay` facade. It also offers a `<x-mib-global-pay::checkout :session="$id" />` Blade component that renders the Checkout.js redirect page.
@@ -621,7 +621,7 @@ interface Attempt
   1. The package never refunds automatically.
   2. A listener, or finance through admin, calls `$gateway->refund($secondOrderId, TransactionId::generate('refund'), $captured)`. A void is tried first, while `void` is still possible, through `ReversalHelper::reverseWithDerivedIds($orderId)`. It tries VOID and falls back to REFUND, and returns which one it used, or `Unconfirmed` if the result is not known yet.
   3. `RefundProcessed` or `VoidProcessed` follows.
-  - **Decided (Q19):** `CaptureMismatch(reason: DoubleCapture)` always fires. The package also ships an optional `AutoReverseDoubleCapture` listener (void, falling back to refund) that is **off by default** (`MIB_AUTO_REVERSE_DOUBLE_CAPTURE=false`). With it off, the host or finance reverses manually.
+  - **Decided (Q19):** `CaptureMismatch(reason: DoubleCapture)` always fires. The package also ships an `AutoReverseDoubleCapture` listener (void, falling back to refund). **Changed (2026-11-02): it is on by default**, because retries after an unresolved payment make a late second capture a known risk. With `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=false`, the host or finance reverses manually.
 - `CaptureMismatch` and `PaymentCapturedForUnpayableOrder` always carry the `VerificationResult`, so the host can show exact amounts.
 - The binding and the full interface signatures are in §6.7. The resolver is bound by the host in a service provider, `$this->app->bind(PayableResolver::class, IsimsPayableResolver::class)`. If it is unbound, the webhook route stays disabled and an exception is thrown with a clear message.
 
@@ -902,7 +902,7 @@ Shared types used in the payloads:
 |---|---|---|---|
 | `Captured` | `Open` / `Frozen` | none | `PaymentCaptured`. ISIMS marks the payable paid and sets `settled_attempt_id` / `settled_transaction_id`. |
 | `Captured` | `Paid` | same order + transaction | nothing (idempotent) |
-| `Captured` | `Paid` | different attempt or transaction | `CaptureMismatch(DoubleCapture)`. If `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=true`, the `AutoReverseDoubleCapture` listener voids that capture, or refunds it if the void fails. |
+| `Captured` | `Paid` | different attempt or transaction | `CaptureMismatch(DoubleCapture)`. Unless `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=false`, the `AutoReverseDoubleCapture` listener voids that capture, or refunds it if the void fails. |
 | `Captured` | `Cancelled` / `Failed` | — | `PaymentCapturedForUnpayableOrder`. ISIMS re-links the original invoices only if they are all still unpaid; otherwise it flags the payable `captured_after_cancel`. |
 | `AmountMismatch` / `CurrencyMismatch` | any | — | `CaptureMismatch(AmountMismatch / CurrencyMismatch)`, never auto-paid |
 | `Pending` | any | — | `PaymentPending`; the payable stays frozen |
@@ -932,7 +932,7 @@ Shared types used in the payloads:
 | `webhook.queue` / `webhook.connection` | `MIB_WEBHOOK_QUEUE` / `MIB_WEBHOOK_CONNECTION` | app default (decided) |
 | `notification_store` | `MIB_NOTIFICATION_STORE` | `database` |
 | `approval.accept_approved_auto` | `MIB_ACCEPT_APPROVED_AUTO` | `false` |
-| `double_capture.auto_reverse` | `MIB_AUTO_REVERSE_DOUBLE_CAPTURE` | `false` |
+| `double_capture.auto_reverse` | `MIB_AUTO_REVERSE_DOUBLE_CAPTURE` | `true` |
 | `attempts.expiry_grace_seconds` | `MIB_ATTEMPT_GRACE_SECONDS` | `300` (decided) |
 | `checkout.timeout_seconds` | `MIB_CHECKOUT_TIMEOUT` (600–1800, sent as `interaction.timeout`) | `1800` (decided) |
 | `allow_insecure_urls` | `MIB_ALLOW_INSECURE_URLS` | `false` |
@@ -1186,7 +1186,11 @@ The "Phase" column follows the decision in §14.0.
 
 ### 14.0 Phasing (decided)
 
-**2.0.0** covers:
+**Unresolved payments (2026-11-02):** `TIMED_OUT` and pending stay unresolved, so no timer clears them for a new charge. This follows Stripe's and Gr4vy's guidance. After `MIB_REVIEW_AFTER_SECONDS`, `PaymentNeedsReview` asks a person to decide, and `confirmUnpaid()` records that decision after re-reading the gateway. Retired attempts stay in `mib:reconcile` for `MIB_LATE_CAPTURE_WATCH_SECONDS`, and a late second capture is reversed by default. If MIB confirms `TIMED_OUT` is final (question 30), treat it as failed and allow an immediate retry.
+
+**Changed (2026-11-02):** every Hosted Checkout feature now ships in 2.0.0, with a ready-made integration so hosts write no Checkout.js or attempt bookkeeping. This replaces the 2.x phase for Payment Links, payment plans, Credential on File, tokens, agreements, server-side Pay, Authorize, Verify and Referral, and the request data in §14.4. The Phase columns below show the original plan. Integrations outside Hosted Checkout (Hosted Session, the Browser Payment, Wallet, Authentication and Risk APIs, Reporting, Batch, mutual TLS) stay in 2.x.
+
+**2.0.0** originally covered:
 
 - the Hosted Checkout lifecycle: Initiate Checkout (WEBSITE) with the interaction options in §14.1, the Checkout.js component, Retrieve Order, Retrieve Transaction, Capture, Refund, Void and Update Authorization;
 - Retrieve Session;
@@ -1210,7 +1214,7 @@ The "Phase" column follows the decision in §14.0.
 | Retrieve Session | `GET /session/{sessionId}` | no | Doc | `retrieveSession(string): SessionDetails` | The response includes `order.id`, `order.amount`, `interaction.operation` and `session.updateStatus`. Useful for confirming what a live session will charge. | 2.0 |
 | Update Session | `PUT /session/{sessionId}` | no | Doc, but the HCO guide says Hosted Session ops are "not needed" for HCO (Q4) | `updateSession(string, SessionUpdate): SessionDetails` | Support for changing amount or order on a live HCO session is unconfirmed. Use `session.version` for optimistic locking. | 2.0, experimental |
 | Create Session (Hosted Session / session authentication) | `POST /session` (no apiOperation) | no | Doc | `createSession(): Session` | Belongs to the Hosted Session (card-fields) integration and to 3DS session authentication. Not needed for HCO. | 2.x |
-| Embedded page / payment page / modal (Checkout.js) | client-side `Checkout.configure({session})`, `showPaymentPage()` / `showEmbeddedPage()` | README snippet only | Doc | Laravel Blade component `<x-mib-global-pay::checkout>` with `mode` (payment or embedded) and callback props. A modal is written by the host. | From v67, `configure()` accepts only `session`; everything else goes in Initiate Checkout, so `GatewayConfig` rejects versions below 67. | 2.0 |
+| Embedded page / payment page / modal (Checkout.js) | client-side `Checkout.configure({session})`, `showPaymentPage()` / `showEmbeddedPage()` | README snippet only | Doc | `Core\Checkout\CheckoutJs` for any PHP app, and the Laravel Blade component `<x-mib-global-pay::checkout>` with `mode` (payment, embedded or modal) and callback props. | From v67, `configure()` accepts only `session`; everything else goes in Initiate Checkout, so `GatewayConfig` rejects versions below 67. | 2.0 |
 | Payment plans / instalments on HCO | `constraints.paymentPlans.*` on Initiate Checkout; `Payment Plan: Plan Offers Inquiry` | no | **MIB?** "agree the available payment plans with your acquirer". Unlikely. | `CheckoutRequest::withPaymentPlanConstraints()`, `planOffersInquiry()` | | 2.x |
 | Non-eCommerce source (MOTO, call centre) | `transaction.source` | yes | MIB? (must be on the merchant-acquirer link) | `CheckoutRequest::withTransactionSource(TransactionSource)` | Payer-present options are disabled when the source is not INTERNET. | 2.0 |
 

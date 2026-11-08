@@ -46,6 +46,8 @@ abstract class TestCase extends Orchestra
         $app['config']->set('queue.default', 'sync');
         $app['config']->set('database.connections.testing', ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']);
         $app['config']->set('app.url', 'https://students.ium.test');
+        $app['config']->set('mib-global-pay.double_capture.auto_reverse', false); // tests that need it opt in
+        $app['config']->set('app.key', 'base64:' . base64_encode(str_repeat('a', 32)));
 
         foreach (static::$config as $key => $value) {
             $app['config']->set($key, $value);

@@ -10,7 +10,9 @@ use IbnNajjaar\MIBGlobalPay\Core\Attempts\Payable;
 use IbnNajjaar\MIBGlobalPay\Laravel\Events\Source;
 use IbnNajjaar\MIBGlobalPay\Core\Contracts\Gateway;
 use IbnNajjaar\MIBGlobalPay\Core\Webhook\Notification;
+use IbnNajjaar\MIBGlobalPay\Core\Attempts\AttemptState;
 use IbnNajjaar\MIBGlobalPay\Core\Attempts\PayableState;
+use IbnNajjaar\MIBGlobalPay\Core\Enums\TransactionType;
 use IbnNajjaar\MIBGlobalPay\Laravel\Events\PaymentFailed;
 use IbnNajjaar\MIBGlobalPay\Laravel\Events\VoidProcessed;
 use IbnNajjaar\MIBGlobalPay\Core\Attempts\PayableResolver;
@@ -18,15 +20,19 @@ use IbnNajjaar\MIBGlobalPay\Core\Attempts\ResolvedAttempt;
 use IbnNajjaar\MIBGlobalPay\Laravel\Events\MismatchReason;
 use IbnNajjaar\MIBGlobalPay\Laravel\Events\PaymentPending;
 use IbnNajjaar\MIBGlobalPay\Core\Webhook\NotificationStore;
+use IbnNajjaar\MIBGlobalPay\Laravel\Events\AccountVerified;
 use IbnNajjaar\MIBGlobalPay\Laravel\Events\CaptureMismatch;
 use IbnNajjaar\MIBGlobalPay\Laravel\Events\PaymentCaptured;
 use IbnNajjaar\MIBGlobalPay\Laravel\Events\PaymentReversed;
 use IbnNajjaar\MIBGlobalPay\Laravel\Events\RefundProcessed;
 use IbnNajjaar\MIBGlobalPay\Core\Webhook\NotificationOutcome;
+use IbnNajjaar\MIBGlobalPay\Laravel\Events\PaymentAuthorized;
+use IbnNajjaar\MIBGlobalPay\Laravel\Events\PaymentNeedsReview;
 use IbnNajjaar\MIBGlobalPay\Laravel\Events\NotificationReceived;
 use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationResult;
 use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationStatus;
 use IbnNajjaar\MIBGlobalPay\Core\Webhook\TransactionNotification;
+use IbnNajjaar\MIBGlobalPay\Laravel\Events\PaymentPartiallyCaptured;
 use IbnNajjaar\MIBGlobalPay\Laravel\Events\UnknownOrderNotification;
 use IbnNajjaar\MIBGlobalPay\Laravel\Events\PaymentCapturedForUnpayableOrder;
 
@@ -38,8 +44,8 @@ use IbnNajjaar\MIBGlobalPay\Laravel\Events\PaymentCapturedForUnpayableOrder;
  * since it calls the gateway), then inside Payable::lock() re-read the payable and dispatch at
  * most one outcome event. The package never marks anything paid: listeners do.
  *
- * Money events (PaymentCaptured, PaymentCapturedForUnpayableOrder, CaptureMismatch, PaymentReversed,
- * RefundProcessed, VoidProcessed) go out at least once until one dispatch completes, then not again:
+ * Money events (PaymentCaptured, PaymentPartiallyCaptured, PaymentAuthorized, AccountVerified,
+ * PaymentCapturedForUnpayableOrder, CaptureMismatch, PaymentReversed, RefundProcessed, VoidProcessed) go out at least once until one dispatch completes, then not again:
  * check for a delivery record, dispatch, and record only once Payable::lock() has returned. After a
  * throwable nothing is recorded, so a retry or mib:reconcile dispatches again. A crash before the
  * record, or a second worker entering the lock before it, repeats the event, so listeners must be
@@ -68,6 +74,7 @@ final readonly class OutcomeProcessor
         private NotificationStore $store,
         private Dispatcher $events,
         ?\Closure $clock = null,
+        private int $reviewAfterSeconds = 86400,
     ) {
         $this->clock = $clock ?? static fn (): \DateTimeImmutable => new \DateTimeImmutable();
     }
@@ -94,7 +101,7 @@ final readonly class OutcomeProcessor
             return NotificationOutcome::Processed;
         }
 
-        if (! $notification->isMoneyIn()) {
+        if (! $notification->isMoneyIn() && ! $notification->isAuthorizationOrVerification()) {
             return NotificationOutcome::Ignored;
         }
 
@@ -166,6 +173,14 @@ final readonly class OutcomeProcessor
         $orderId = $attempt->gatewayOrderId();
         $transactionId = $v->transactionId();
 
+        // A retired attempt is only watched for a late charge, so every other answer is news to nobody.
+        if (
+            in_array($attempt->state(), [AttemptState::Superseded, AttemptState::Failed], true)
+            && in_array($v->status, [VerificationStatus::NotCaptured, VerificationStatus::NotFound, VerificationStatus::Pending, VerificationStatus::Verified], true)
+        ) {
+            return new OutcomeResult($v, null);
+        }
+
         switch ($v->status) {
             case VerificationStatus::Captured:
                 /** @var string $transactionId Captured always has a capturing transaction */
@@ -196,6 +211,18 @@ final readonly class OutcomeProcessor
 
                 return $this->once($v, 'captured_for_unpayable', fn (string $key): PaymentCapturedForUnpayableOrder => new PaymentCapturedForUnpayableOrder($orderId, $payable, $attempt, $v, $transactionId, $state, $source, $key, $n), $dispatching);
 
+            case VerificationStatus::PartiallyCaptured:
+                /** @var string $transactionId PartiallyCaptured always has a capturing transaction */
+                return $this->once($v, 'partially_captured', fn (string $key): PaymentPartiallyCaptured => new PaymentPartiallyCaptured($orderId, $payable, $attempt, $v, $transactionId, $source, $key, $n), $dispatching);
+
+            case VerificationStatus::Authorized:
+                /** @var string $transactionId Authorized always has an authorization transaction */
+                return $this->once($v, 'payment_authorized', fn (string $key): PaymentAuthorized => new PaymentAuthorized($orderId, $payable, $attempt, $v, $transactionId, $source, $key, $n), $dispatching);
+
+            case VerificationStatus::Verified:
+                /** @var string $transactionId Verified always has a verification transaction */
+                return $this->once($v, 'account_verified', fn (string $key): AccountVerified => new AccountVerified($orderId, $payable, $attempt, $v, $transactionId, $source, $key, $n), $dispatching);
+
             case VerificationStatus::AmountMismatch:
             case VerificationStatus::CurrencyMismatch:
                 $reason = $v->status === VerificationStatus::AmountMismatch ? MismatchReason::AmountMismatch : MismatchReason::CurrencyMismatch;
@@ -203,6 +230,12 @@ final readonly class OutcomeProcessor
                 return $this->once($v, $reason->value, fn (string $key): CaptureMismatch => new CaptureMismatch($orderId, $payable, $attempt, $v, $reason, $payable->settledBy(), $transactionId, $source, $key, $n), $dispatching);
 
             case VerificationStatus::Pending:
+                $since = $this->pendingSince($attempt, $v);
+
+                if ($since->modify(sprintf('+%d seconds', $this->reviewAfterSeconds)) <= ($this->clock)()) {
+                    return $this->once($v, 'needs_review', fn (string $key): PaymentNeedsReview => new PaymentNeedsReview($orderId, $payable, $attempt, $v, $since, $source, $key, $n), $dispatching);
+                }
+
                 return $this->oncePerNotification($v, 'payment_pending', new PaymentPending($orderId, $payable, $attempt, $v, $source, $n), $n, $claimed);
 
             case VerificationStatus::Reversed:
@@ -225,6 +258,20 @@ final readonly class OutcomeProcessor
 
                 return $this->oncePerNotification($v, 'payment_failed', new PaymentFailed($orderId, $payable, $attempt, $v, $n?->transaction->gatewayCode, $source, $n), $n, $claimed);
         }
+    }
+
+    /** When the latest transaction happened. Not expiresAt, which can be months away for a payment link. */
+    private function pendingSince(Attempt $attempt, VerificationResult $v): \DateTimeImmutable
+    {
+        $since = $v->order?->creationTime;
+
+        foreach ($v->order === null ? [] : $v->order->transactions as $transaction) {
+            if ($transaction->type !== TransactionType::Authentication && $transaction->timeOfRecord !== null) {
+                $since = $transaction->timeOfRecord;
+            }
+        }
+
+        return $since ?? $attempt->expiresAt();
     }
 
     /**

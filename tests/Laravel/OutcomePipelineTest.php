@@ -128,7 +128,7 @@ it('reports a failed webhook transaction as PaymentFailed even before expiry', f
     Event::assertDispatched(PaymentFailed::class, fn (PaymentFailed $e) => $e->gatewayCode?->value === 'DECLINED');
 });
 
-it('reports unknown orders, and ignores authentication and other notifications', function () {
+it('reports unknown orders, including authorizations, and ignores authentication and other notifications', function () {
     bindResolver();
     Event::fake([UnknownOrderNotification::class]);
 
@@ -140,9 +140,9 @@ it('reports unknown orders, and ignores authentication and other notifications',
     expect(processor()->handleNotification($payment))->toBe(NotificationOutcome::Processed)
         ->and(processor()->handleNotification($auth))->toBe(NotificationOutcome::Ignored)
         ->and(processor()->handleNotification($other))->toBe(NotificationOutcome::Ignored)
-        ->and(processor()->handleNotification($authorization))->toBe(NotificationOutcome::Ignored);
+        ->and(processor()->handleNotification($authorization))->toBe(NotificationOutcome::Processed);
 
-    Event::assertDispatchedTimes(UnknownOrderNotification::class, 1);
+    Event::assertDispatchedTimes(UnknownOrderNotification::class, 2);
 });
 
 it('dispatches RefundProcessed once, then re-verifies the order', function () {

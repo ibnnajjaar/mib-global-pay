@@ -108,6 +108,7 @@ it('fails closed with 503 when no secret is configured', function () {
 });
 
 it('answers 503 while no PayableResolver is bound', function () {
+    $this->bootWith(['mib-global-pay.checkout.managed_attempts' => false]);
     Event::fake([NotificationReceived::class]);
 
     $this->call('POST', '/mib/webhook', [], [], [], webhookServer(), notificationBody())->assertStatus(503);

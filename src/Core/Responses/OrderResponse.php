@@ -120,6 +120,26 @@ final readonly class OrderResponse
         return $matches === [] ? null : $matches[array_key_last($matches)];
     }
 
+    /** The saved-card token for this order, if the payer agreed to save the card. Store it securely. */
+    public function token(): ?string
+    {
+        $token = $this->payload->string('sourceOfFunds.token');
+
+        if ($token !== null) {
+            return $token;
+        }
+
+        foreach (array_reverse($this->transactions) as $transaction) {
+            $token = $transaction->payload->string('sourceOfFunds.token');
+
+            if ($token !== null) {
+                return $token;
+            }
+        }
+
+        return null;
+    }
+
     public function rawStatus(): ?string
     {
         return $this->payload->string('status');

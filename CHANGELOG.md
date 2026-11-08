@@ -7,7 +7,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 - Keep a Changelog: https://keepachangelog.com/en/1.1.0/
 - Semantic Versioning: https://semver.org/spec/v2.0.0.html
 
-## [2.0.0-beta.1] - 2026-11-02
+## [2.0.0-beta.1] - 2026-11-08
 This is a beta, not a finished 2.0.0. No authenticated sandbox flow has been run against the gateway, and MIB has not answered our open questions, so some gateway behaviour is still unverified. The list is at the top of [DESIGN-v2.md](https://github.com/ibnnajjaar/mib-global-pay/blob/main/DESIGN-v2.md).
 
 Version 2 is a rewrite; see [UPGRADE.md](./UPGRADE.md). Install it with the command in the [README](./README.md#installation).
@@ -17,7 +17,11 @@ Version 2 is a rewrite; see [UPGRADE.md](./UPGRADE.md). Install it with the comm
 - The Docker development setup (`Dockerfile`, `docker-compose.yml`, `.dockerignore`).
 
 ### Changed
-- `MibGlobalPay::initiateCheckout()` in the Laravel layer throws `InvalidRequest` for anything but `PURCHASE`, because the outcome pipeline can't follow other operations. `MibGlobalPay::gateway()->checkout()->initiate()` still sends them.
+- `verifyCapture()` now reports `Authorized`, `Verified` and `PartiallyCaptured` instead of `NotCaptured` or `AmountMismatch` for these flows, and the outcome pipeline dispatches `PaymentAuthorized`, `AccountVerified` and `PaymentPartiallyCaptured`. `AttemptGuard` refuses a new attempt with `AuthorizationHeld` while an authorization holds funds. `AttemptState` gains `Authorized` and `Verified`.
+- `Gateway` gains `tokens()`, `paymentLinks()` and `agreements()`, so custom implementations need them.
+- Double-capture auto-reversal is now on by default and needs a queue worker. Turn it off with `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=false`.
+- The pipeline dispatches nothing for a retired attempt (`Superseded` or `Failed`) unless money moved. `AttemptState::Failed` can now move to `Captured`, for a late charge.
+- Laravel binds a default `PayableResolver` unless `MIB_MANAGED_ATTEMPTS=false`, so the webhook no longer answers 503 when you have not bound one.
 - `GatewayConfig` rejects API versions below 67.
 - The merchant logo URL must use HTTPS even when `allow_insecure_urls` is on, because the gateway requires it.
 - The checkout component shows the payer a message when Checkout.js reports an error or fails to load. It no longer sets an empty `cancel` callback, so the gateway's own cancel behaviour applies unless you pass one.
@@ -33,7 +37,15 @@ Version 2 is a rewrite; see [UPGRADE.md](./UPGRADE.md). Install it with the comm
 - `CheckoutRequest::withDisplayControl()` with the `FieldDisplay`, `ShippingDisplay` and `PaymentTermsDisplay` enums, for the billing address, customer email, shipping and payment terms.
 - `CheckoutRequest::forVerification()`, for a `VERIFY` checkout. It is the only one that may send a zero amount.
 - `CheckoutRequest::operation()`.
-- The checkout component takes `mode="embedded"`, and `error`, `cancel`, `complete`, `timeout`, `before-redirect` and `after-redirect` callback props.
+- The checkout component takes `mode="embedded"` or `mode="modal"`, and `error`, `cancel`, `complete`, `timeout`, `before-redirect` and `after-redirect` callback props.
+- `CheckoutJs`, which renders all the Checkout.js for the Payment Page, Embedded Page and modal, for any PHP app.
+- A ready-made Laravel integration: the `HasMibPayments` trait, the `CheckoutAttempt` model and table, `EloquentPayableResolver`, `MibGlobalPay::startCheckout()` and `startPaymentLink()`, and routes for the payment page, the payer's return and payment link errors.
+- `PaymentNeedsReview`, fired once when a payment stays pending or timed out past `MIB_REVIEW_AFTER_SECONDS` (24 hours by default), and `MibGlobalPay::confirmUnpaid()`, which lets a person release the payer after asking the acquirer.
+- `mib:reconcile` keeps checking superseded and confirmed-unpaid attempts for `MIB_LATE_CAPTURE_WATCH_SECONDS` (7 days by default), so a late charge is found even if its webhook is lost.
+- Payment Links: `withPaymentLink()`, `createPaymentLink()` and `deletePaymentLink()`.
+- Credential on File: `withSaveCard()`, `withTokens()`, `withAgreement()`, `withStoredOnFile()`, `OrderResponse::token()`, and the `tokens()` and `agreements()` clients.
+- Server-side `pay()`, `authorize()`, `verifyAccount()` and `referral()`, `planOffers()`, and updated order data on `capture()`.
+- `withCustomer()`, `withBillingAddress()`, `withShipping()`, `withLineItems()`, `withStatementDescriptor()`, `withOrderDetails()`, `withAirlineData()`, `withCruiseData()` and `withPaymentPlanConstraints()`.
 - An MIT `LICENSE` file, included in the package archive.
 - v2 core types under `IbnNajjaar\MIBGlobalPay\Core`: `Money` (minor units, explicit rounding, no float paths), the `Currency` enum (curated ISO 4217 subset), the gateway enums (`OrderStatus`, `TransactionType`, `Result`, `GatewayCode`, `GatewayRecommendation`) with an `Unrecognized` fallback, `ApprovalPolicy`, the null-safe `Payload` reader, `GatewayConfig` with environment presets, and the exception hierarchy (`MibGlobalPayException` marker interface).
 

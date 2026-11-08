@@ -157,7 +157,10 @@ it('builds realistic orders with the factories', function (array $order, Verific
     expect($fake->verifyCapture('O-1', mvrAmount())->status)->toBe($status);
 })->with([
     'captured' => [OrderFactory::captured(mvrAmount()), VerificationStatus::Captured],
-    'authorized only' => [OrderFactory::authorizedOnly(mvrAmount()), VerificationStatus::NotCaptured],
+    'authorized only' => [OrderFactory::authorizedOnly(mvrAmount()), VerificationStatus::Authorized],
+    'partially captured' => [OrderFactory::partiallyCaptured(mvrAmount(), mvrAmount('100')), VerificationStatus::PartiallyCaptured],
+    'authorization voided' => [OrderFactory::authorizationVoided(mvrAmount()), VerificationStatus::NotCaptured],
+    'verified' => [OrderFactory::verified(mvrAmount()), VerificationStatus::Verified],
     'declined' => [OrderFactory::declined(mvrAmount()), VerificationStatus::NotCaptured],
     'pending' => [OrderFactory::pending(mvrAmount()), VerificationStatus::Pending],
     'partially refunded' => [OrderFactory::partiallyRefunded(mvrAmount(), mvrAmount('250')), VerificationStatus::Captured],

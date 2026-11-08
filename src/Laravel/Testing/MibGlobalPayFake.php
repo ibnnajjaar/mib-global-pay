@@ -12,12 +12,19 @@ use IbnNajjaar\MIBGlobalPay\Core\Money\Currency;
 use IbnNajjaar\MIBGlobalPay\Core\Support\Payload;
 use IbnNajjaar\MIBGlobalPay\Core\Contracts\Gateway;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\OrderClient;
+use IbnNajjaar\MIBGlobalPay\Core\Clients\TokenClient;
 use IbnNajjaar\MIBGlobalPay\Core\Contracts\Operation;
 use IbnNajjaar\MIBGlobalPay\Core\Config\GatewayConfig;
+use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\Pay;
+use IbnNajjaar\MIBGlobalPay\Core\Responses\PlanOffers;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\GatewayClient;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\SessionClient;
+use IbnNajjaar\MIBGlobalPay\Core\Responses\PaymentLink;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\CheckoutClient;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\SessionUpdate;
+use IbnNajjaar\MIBGlobalPay\Core\Requests\StoredPayment;
+use IbnNajjaar\MIBGlobalPay\Core\Responses\TokenDetails;
+use IbnNajjaar\MIBGlobalPay\Core\Clients\AgreementClient;
 use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\Refund;
 use IbnNajjaar\MIBGlobalPay\Core\Responses\GatewayStatus;
 use IbnNajjaar\MIBGlobalPay\Core\Responses\OrderResponse;
@@ -25,11 +32,20 @@ use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\Capture;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\CheckoutRequest;
 use IbnNajjaar\MIBGlobalPay\Core\Responses\PaymentOptions;
 use IbnNajjaar\MIBGlobalPay\Core\Responses\SessionDetails;
+use IbnNajjaar\MIBGlobalPay\Core\Clients\PaymentLinkClient;
+use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\Referral;
 use IbnNajjaar\MIBGlobalPay\Core\Responses\CheckoutSession;
+use IbnNajjaar\MIBGlobalPay\Core\Responses\OperationResult;
+use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\Authorize;
+use IbnNajjaar\MIBGlobalPay\Core\Operations\Token\SaveToken;
+use IbnNajjaar\MIBGlobalPay\Core\Responses\AgreementDetails;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\GatewayException;
+use IbnNajjaar\MIBGlobalPay\Core\Operations\Token\DeleteToken;
 use IbnNajjaar\MIBGlobalPay\Core\Verification\CaptureVerifier;
 use IbnNajjaar\MIBGlobalPay\Core\Responses\TransactionResponse;
 use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\RetrieveOrder;
+use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\VerifyAccount;
+use IbnNajjaar\MIBGlobalPay\Core\Operations\Token\RetrieveToken;
 use IbnNajjaar\MIBGlobalPay\Core\Operations\Gateway\CheckGateway;
 use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationResult;
 use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\VoidTransaction;
@@ -39,7 +55,11 @@ use IbnNajjaar\MIBGlobalPay\Core\Operations\Checkout\InitiateCheckout;
 use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\RetrieveTransaction;
 use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\UpdateAuthorization;
 use IbnNajjaar\MIBGlobalPay\Core\Operations\Order\TransactionOperation;
+use IbnNajjaar\MIBGlobalPay\Core\Operations\Agreement\RetrieveAgreement;
 use IbnNajjaar\MIBGlobalPay\Core\Operations\Gateway\PaymentOptionsInquiry;
+use IbnNajjaar\MIBGlobalPay\Core\Operations\PaymentLink\DeletePaymentLink;
+use IbnNajjaar\MIBGlobalPay\Core\Operations\PaymentPlan\PlanOffersInquiry;
+use IbnNajjaar\MIBGlobalPay\Core\Operations\PaymentLink\InitiatePaymentLink;
 
 /**
  * In-memory Gateway for host tests. No network.
@@ -174,6 +194,21 @@ final class MibGlobalPayFake implements Gateway
         return $verifier->verify($order, $expected);
     }
 
+    public function tokens(): TokenClient
+    {
+        return new TokenClient($this);
+    }
+
+    public function paymentLinks(): PaymentLinkClient
+    {
+        return new PaymentLinkClient($this);
+    }
+
+    public function agreements(): AgreementClient
+    {
+        return new AgreementClient($this);
+    }
+
     public function checkout(): CheckoutClient
     {
         return new CheckoutClient($this);
@@ -221,9 +256,12 @@ final class MibGlobalPayFake implements Gateway
         return $this->orders()->retrieveTransaction($orderId, $transactionId);
     }
 
-    public function capture(string $orderId, string $transactionId, Money $amount, ?string $reference = null): TransactionResponse
+    /**
+     * @param array<string, mixed> $extraFields
+     */
+    public function capture(string $orderId, string $transactionId, Money $amount, ?string $reference = null, array $extraFields = []): TransactionResponse
     {
-        return $this->orders()->capture($orderId, $transactionId, $amount, $reference);
+        return $this->orders()->capture($orderId, $transactionId, $amount, $reference, $extraFields);
     }
 
     public function refund(string $orderId, string $transactionId, Money $amount, ?string $targetTransactionId = null, ?string $reference = null): TransactionResponse
@@ -239,6 +277,56 @@ final class MibGlobalPayFake implements Gateway
     public function updateAuthorization(string $orderId, string $transactionId, ?Money $amount = null, ?string $reference = null): TransactionResponse
     {
         return $this->orders()->updateAuthorization($orderId, $transactionId, $amount, $reference);
+    }
+
+    public function pay(string $orderId, string $transactionId, Money $amount, StoredPayment $payment, ?string $reference = null): TransactionResponse
+    {
+        return $this->orders()->pay($orderId, $transactionId, $amount, $payment, $reference);
+    }
+
+    public function authorize(string $orderId, string $transactionId, Money $amount, StoredPayment $payment, ?string $reference = null): TransactionResponse
+    {
+        return $this->orders()->authorize($orderId, $transactionId, $amount, $payment, $reference);
+    }
+
+    public function verifyAccount(string $orderId, string $transactionId, Currency $currency, StoredPayment $payment, ?string $reference = null): TransactionResponse
+    {
+        return $this->orders()->verify($orderId, $transactionId, $currency, $payment, $reference);
+    }
+
+    public function referral(string $orderId, string $transactionId, string $authorizationCode, ?string $reference = null): TransactionResponse
+    {
+        return $this->orders()->referral($orderId, $transactionId, $authorizationCode, $reference);
+    }
+
+    public function createPaymentLink(CheckoutRequest $request): PaymentLink
+    {
+        return $this->paymentLinks()->create($request);
+    }
+
+    public function deletePaymentLink(string $linkId): OperationResult
+    {
+        return $this->paymentLinks()->delete($linkId);
+    }
+
+    public function retrieveToken(string $token): TokenDetails
+    {
+        return $this->tokens()->retrieve($token);
+    }
+
+    public function deleteToken(string $token): OperationResult
+    {
+        return $this->tokens()->delete($token);
+    }
+
+    public function retrieveAgreement(string $agreementId): AgreementDetails
+    {
+        return $this->agreements()->retrieve($agreementId);
+    }
+
+    public function planOffers(string $planId, Money $amount, int $numberOfPayments, string $token): PlanOffers
+    {
+        return $this->gateway()->planOffers($planId, $amount, $numberOfPayments, $token);
     }
 
     public function checkGateway(): GatewayStatus
@@ -383,6 +471,18 @@ final class MibGlobalPayFake implements Gateway
 
         return match (true) {
             $operation instanceof InitiateCheckout => $this->checkoutPayload($operation->request, self::randomSessionId(), bin2hex(random_bytes(8))),
+            $operation instanceof InitiatePaymentLink => [
+                'checkoutMode' => 'PAYMENT_LINK',
+                'merchant' => $this->config->merchantId,
+                'paymentLink' => ['id' => $id = 'PAYLINK' . strtoupper(bin2hex(random_bytes(12))), 'url' => 'https://' . $this->config->host . '/pbl/' . $id],
+                'result' => 'SUCCESS',
+                'successIndicator' => bin2hex(random_bytes(8)),
+            ],
+            $operation instanceof DeletePaymentLink, $operation instanceof DeleteToken => ['result' => 'SUCCESS'],
+            $operation instanceof RetrieveToken => ['result' => 'SUCCESS', 'status' => 'VALID', 'token' => $operation->token],
+            $operation instanceof SaveToken => ['result' => 'SUCCESS', 'status' => 'VALID', 'token' => $operation->token ?? bin2hex(random_bytes(8))],
+            $operation instanceof RetrieveAgreement => ['result' => 'SUCCESS', 'agreement' => ['id' => $operation->agreementId, 'status' => 'ACTIVE']],
+            $operation instanceof PlanOffersInquiry => ['result' => 'SUCCESS', 'paymentPlan' => ['planId' => $operation->planId, 'planOffer' => []]],
             $operation instanceof RetrieveOrder => throw self::notFound('Unable to find order ' . $operation->orderId),
             $operation instanceof RetrieveTransaction => $this->transactionFromOrder($operation),
             $operation instanceof TransactionOperation => $this->approvedTransaction($operation),
@@ -470,6 +570,10 @@ final class MibGlobalPayFake implements Gateway
             $operation instanceof Refund => ['REFUND', $operation->amount, $operation->targetTransactionId],
             $operation instanceof VoidTransaction => ['VOID_PAYMENT', null, $operation->targetTransactionId],
             $operation instanceof UpdateAuthorization => ['AUTHORIZATION_UPDATE', $operation->amount, null],
+            $operation instanceof Pay => ['PAYMENT', $operation->amount, null],
+            $operation instanceof Authorize => ['AUTHORIZATION', $operation->amount, null],
+            $operation instanceof VerifyAccount => ['VERIFICATION', null, null],
+            $operation instanceof Referral => ['PAYMENT', null, null],
             default => ['UNKNOWN', null, null],
         };
 

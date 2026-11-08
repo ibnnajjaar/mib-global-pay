@@ -18,12 +18,14 @@ use IbnNajjaar\MIBGlobalPay\Core\Responses\TransactionResponse;
  *
  * Rules, in order:
  *  1. No approved PAYMENT/CAPTURE: Pending if the latest non-authentication transaction is
- *     pending or unknown, otherwise NotCaptured.
+ *     pending or unknown; Authorized if an approved authorization has not been voided; Verified
+ *     if an approved verification exists; otherwise NotCaptured.
  *  2. Every approved PAYMENT/CAPTURE was voided (approved VOID_PAYMENT/VOID_CAPTURE targeting
  *     it), or refunds cover the captured total: Reversed.
  *  3. Order currency differs from the expected currency: CurrencyMismatch.
  *  4. totalCapturedAmount missing from the response: AmountMismatch (never a match).
- *  5. totalCapturedAmount equals the expected amount: Captured; otherwise AmountMismatch.
+ *  5. totalCapturedAmount equals the expected amount: Captured. Below it, on an order with an
+ *     approved authorization: PartiallyCaptured. Otherwise AmountMismatch.
  */
 final readonly class CaptureVerifier
 {
@@ -48,7 +50,7 @@ final readonly class CaptureVerifier
         ));
 
         if ($captures === []) {
-            return $this->result($this->isPending($order) ? VerificationStatus::Pending : VerificationStatus::NotCaptured, $order, $expected, null);
+            return $this->withoutCapture($order, $expected);
         }
 
         $voided = $this->voidedTransactionIds($order);
@@ -69,11 +71,52 @@ final readonly class CaptureVerifier
             return $this->result(VerificationStatus::AmountMismatch, $order, $expected, $live[0]);
         }
 
-        return $this->result(
-            $order->totalCaptured->equals($expected) ? VerificationStatus::Captured : VerificationStatus::AmountMismatch,
-            $order,
-            $expected,
-            $live[0],
+        if ($order->totalCaptured->equals($expected)) {
+            return $this->result(VerificationStatus::Captured, $order, $expected, $live[0]);
+        }
+
+        // Each partial capture is its own event, so report the newest one.
+        return $order->totalCaptured->lessThan($expected) && $this->approvedAuthorization($order) !== null
+            ? $this->result(VerificationStatus::PartiallyCaptured, $order, $expected, $live[array_key_last($live)])
+            : $this->result(VerificationStatus::AmountMismatch, $order, $expected, $live[0]);
+    }
+
+    private function withoutCapture(OrderResponse $order, Money $expected): VerificationResult
+    {
+        if ($this->isPending($order)) {
+            return $this->result(VerificationStatus::Pending, $order, $expected, null);
+        }
+
+        $authorization = $this->approvedAuthorization($order);
+        if ($authorization !== null) {
+            return $this->result(VerificationStatus::Authorized, $order, $expected, $authorization);
+        }
+
+        $verification = array_find(
+            $order->transactions,
+            fn (TransactionResponse $t): bool => $t->type === TransactionType::Verification && $t->isApproved($this->policy),
+        );
+
+        return $verification === null
+            ? $this->result(VerificationStatus::NotCaptured, $order, $expected, null)
+            : $this->result(VerificationStatus::Verified, $order, $expected, $verification);
+    }
+
+    /** The approved authorization that has not been voided, if any. */
+    private function approvedAuthorization(OrderResponse $order): ?TransactionResponse
+    {
+        $voided = [];
+        foreach ($order->transactions as $void) {
+            if ($void->type === TransactionType::VoidAuthorization && $void->isApproved($this->policy) && $void->targetTransactionId !== null) {
+                $voided[] = $void->targetTransactionId;
+            }
+        }
+
+        return array_find(
+            $order->transactions,
+            fn (TransactionResponse $t): bool => $t->type === TransactionType::Authorization
+                && $t->isApproved($this->policy)
+                && ! in_array($t->transactionId, $voided, true),
         );
     }
 

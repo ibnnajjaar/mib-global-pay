@@ -6,6 +6,7 @@ namespace IbnNajjaar\MIBGlobalPay\Core\Operations\Order;
 
 use IbnNajjaar\MIBGlobalPay\Core\Money\Money;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\Validate;
+use IbnNajjaar\MIBGlobalPay\Core\Support\RequestBody;
 use IbnNajjaar\MIBGlobalPay\Core\Config\GatewayConfig;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
 
@@ -15,11 +16,19 @@ use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
 final readonly class Capture extends TransactionOperation
 {
     /**
+     * @param array<string, mixed> $extraFields updated order data to send with the capture, such as a new shipping address
+     *
      * @throws InvalidRequest
      */
-    public function __construct(string $orderId, string $transactionId, public Money $amount, ?string $reference = null)
+    public function __construct(string $orderId, string $transactionId, public Money $amount, ?string $reference = null, public array $extraFields = [])
     {
         parent::__construct($orderId, $transactionId, $reference);
+    }
+
+    public function body(GatewayConfig $config): array
+    {
+        /** @var array<string, mixed> */
+        return RequestBody::withoutNulls(RequestBody::merge(parent::body($config), $this->extraFields));
     }
 
     protected function apiOperation(): string

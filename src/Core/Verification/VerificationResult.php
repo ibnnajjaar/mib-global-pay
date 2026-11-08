@@ -29,17 +29,24 @@ final readonly class VerificationResult
         return $this->status === VerificationStatus::Captured;
     }
 
-    /** Captured, AmountMismatch or CurrencyMismatch: money moved, whether or not it matches. */
+    /** Whether an approved authorization is holding the payer's funds. */
+    public function isAuthorizationHeld(): bool
+    {
+        return $this->status === VerificationStatus::Authorized;
+    }
+
+    /** Captured, PartiallyCaptured, AmountMismatch or CurrencyMismatch: money moved, whether or not it matches. */
     public function isMoneyCaptured(): bool
     {
         return in_array($this->status, [
             VerificationStatus::Captured,
+            VerificationStatus::PartiallyCaptured,
             VerificationStatus::AmountMismatch,
             VerificationStatus::CurrencyMismatch,
         ], true);
     }
 
-    /** The transaction ID of the approved payment or capture, if any. */
+    /** The transaction ID of the approved payment, capture, authorization or verification, if any. */
     public function transactionId(): ?string
     {
         return $this->capturingTransaction?->transactionId;

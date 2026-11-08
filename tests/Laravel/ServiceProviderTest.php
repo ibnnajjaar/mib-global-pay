@@ -28,7 +28,7 @@ it('builds the gateway config from config/mib-global-pay.php with the decided de
         ->and(config('mib-global-pay.webhook.path'))->toBe('mib/webhook')
         ->and(config('mib-global-pay.webhook.register_route'))->toBeTrue()
         ->and(config('mib-global-pay.notification_store'))->toBe('cache')
-        ->and(config('mib-global-pay.double_capture.auto_reverse'))->toBeFalse()
+        ->and((require __DIR__ . '/../../config/mib-global-pay.php')['double_capture']['auto_reverse'])->toBeTrue()
         ->and(config('mib-global-pay.attempts.expiry_grace_seconds'))->toBe(300)
         ->and(config('mib-global-pay.checkout.timeout_seconds'))->toBe(1800);
 });

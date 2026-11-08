@@ -11,7 +11,7 @@ use IbnNajjaar\MIBGlobalPay\Laravel\Events\MismatchReason;
 use IbnNajjaar\MIBGlobalPay\Laravel\Events\CaptureMismatch;
 
 /**
- * Opt-in (MIB_AUTO_REVERSE_DOUBLE_CAPTURE, off by default): on CaptureMismatch(DoubleCapture),
+ * On by default (turn off with MIB_AUTO_REVERSE_DOUBLE_CAPTURE=false): on CaptureMismatch(DoubleCapture),
  * queue a reversal (void, falling back to refund) of the second capture. The CaptureMismatch event
  * still reaches the host's own listeners either way. The job is dispatched after the database
  * transaction commits, never inside the payable lock.
