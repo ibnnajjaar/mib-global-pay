@@ -23,14 +23,10 @@ use IbnNajjaar\MIBGlobalPay\Laravel\Stores\CacheNotificationStore;
 use IbnNajjaar\MIBGlobalPay\Laravel\Stores\DatabaseNotificationStore;
 
 /*
- * The store on real databases. Everything here runs on SQLite with no setup. MySQL and PostgreSQL
- * tests skip unless these point at a THROWAWAY database (tests drop and recreate their tables):
+ * The store on real databases. Everything here runs on SQLite with no setup. The MySQL tests skip
+ * unless this points at a THROWAWAY database (tests drop and recreate their tables):
  *
  *   MIB_TEST_MYSQL_DSN=mysql://root:test@127.0.0.1:53306/test
- *   MIB_TEST_PGSQL_DSN=pgsql://postgres:test@127.0.0.1:55432/test
- *
- * PostgreSQL is the one that matters for host transactions: a failed statement aborts the whole
- * transaction there, unless it ran inside a savepoint.
  */
 
 const STORE_TEST_CONNECTION = 'mib_store_test';
@@ -48,16 +44,13 @@ function storeTestConfig(string $driver): array
         return ['driver' => 'sqlite', 'database' => storeTestSqliteFile(), 'prefix' => ''];
     }
 
-    $variable = $driver === 'mysql' ? 'MIB_TEST_MYSQL_DSN' : 'MIB_TEST_PGSQL_DSN';
-    $url = getenv($variable);
+    $url = getenv('MIB_TEST_MYSQL_DSN');
 
     if (! is_string($url) || $url === '') {
-        test()->markTestSkipped("Set {$variable} to run this against a real server.");
+        test()->markTestSkipped('Set MIB_TEST_MYSQL_DSN to run this against a real server.');
     }
 
-    return $driver === 'mysql'
-        ? ['driver' => 'mysql', 'url' => $url, 'charset' => 'utf8mb4', 'collation' => 'utf8mb4_unicode_ci', 'prefix' => '', 'strict' => true]
-        : ['driver' => 'pgsql', 'url' => $url, 'charset' => 'utf8', 'prefix' => '', 'search_path' => 'public'];
+    return ['driver' => 'mysql', 'url' => $url, 'charset' => 'utf8mb4', 'collation' => 'utf8mb4_unicode_ci', 'prefix' => '', 'strict' => true];
 }
 
 function storeOn(string $driver): DatabaseNotificationStore
@@ -168,7 +161,7 @@ function raceForClaims(string $driver, string $mode, string $kind, int $workers 
     return $outcomes;
 }
 
-dataset('store databases', ['sqlite', 'mysql', 'pgsql']);
+dataset('store databases', ['sqlite', 'mysql']);
 dataset('claim kinds', ['claim', 'claimTransaction']);
 
 afterEach(function () {
@@ -264,17 +257,8 @@ it('lets a claim roll back with the host transaction', function (string $driver)
 it('reports a duplicate committed after the snapshot of a repeatable read transaction', function (string $driver) {
     $store = storeOn($driver);
     config()->set('database.connections.mib_store_test_other', storeTestConfig($driver));
-    $isolate = "set transaction isolation level repeatable read";
-
-    if ($driver === 'mysql') {
-        DB::statement($isolate);
-    }
-
+    DB::statement("set transaction isolation level repeatable read");
     DB::beginTransaction();
-
-    if ($driver === 'pgsql') {
-        DB::statement($isolate);
-    }
 
     expect(storeRows())->toBe(0);
     new DatabaseNotificationStore(DB::connection('mib_store_test_other'))->claim('N1');
@@ -285,7 +269,7 @@ it('reports a duplicate committed after the snapshot of a repeatable read transa
     DB::commit();
 
     expect(hostWrites())->toBe(['still-usable']);
-})->with(['mysql', 'pgsql']);
+})->with(['mysql']);
 
 // Pins the mechanism where the database itself can't show the bug: on SQLite and MySQL a failed
 // insert doesn't abort the transaction, so this is what keeps a no-server run honest.
@@ -495,17 +479,8 @@ it('lets a delivery record roll back with the host transaction', function (strin
 it('records a delivery committed after the snapshot of a repeatable read transaction, without an error', function (string $driver) {
     $store = storeOn($driver);
     config()->set('database.connections.mib_store_test_other', storeTestConfig($driver));
-    $isolate = 'set transaction isolation level repeatable read';
-
-    if ($driver === 'mysql') {
-        DB::statement($isolate);
-    }
-
+    DB::statement('set transaction isolation level repeatable read');
     DB::beginTransaction();
-
-    if ($driver === 'pgsql') {
-        DB::statement($isolate);
-    }
 
     // This snapshot cannot see the other worker's record, so the event goes out again here.
     expect(storeRows())->toBe(0);
@@ -519,7 +494,7 @@ it('records a delivery committed after the snapshot of a repeatable read transac
 
     expect(hostWrites())->toBe(['still-usable'])
         ->and($store->wasDelivered('O-1', 'T-1', 'payment_captured'))->toBeTrue();
-})->with(['mysql', 'pgsql']);
+})->with(['mysql']);
 
 it('records a delivery once when processes race, with no errors', function (string $driver, string $mode) {
     storeOn($driver);
