@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-11-08 11:09'
-updated_date: '2026-11-08 13:24'
+updated_date: '2026-11-08 14:00'
 labels:
   - qa
 dependencies:
@@ -77,4 +77,6 @@ Step 5 (partial): artisan mib:reconcile with four live, unpaid, unexpired attemp
 Step 7: dashboard confirm_unpaid on live QA-INV-0003-1 (confirmed_by qa-agent, reason QA) -> 'confirmed unpaid'; attempt state failed, confirmed_unpaid_at 2026-11-08 13:24:10 UTC, confirmed_unpaid_by qa-agent, confirmed_unpaid_reason QA. No event recorded for it.
 Step 7 negative: confirm_unpaid on QA-INV-0001-1 (captured, then voided) -> AttemptNotUnpaid 'The gateway reports this attempt as reversed, so it cannot be confirmed unpaid'.
 Step 8 (partial): /qa/invoices/3/pay again -> 302 to /mib/pay/QA-INV-0003-2; a new attempt QA-INV-0003-2 (live) was created. Paying it is blocked by the outage.
+
+19:00 +05:00 (14:00:04 UTC) mib:reconcile after the live attempts passed expires_at (which already includes the 300 s grace: QA-INV-0003-2 created 13:24:10, expires 13:59:10): QA-INV-0004-1, -0005-1, -0007-1 and -0003-2 -> Verification not_found, Event PaymentFailed (source reconcile, status not_found), state failed. QA-INV-0003-1 (confirmed unpaid earlier) listed again, not_found, no event. A second run listed only QA-INV-0003-1 and dispatched nothing; PaymentFailed count stays 4 (one per attempt). So abandoned sessions expire into PaymentFailed exactly once, which matches TASK-14.3 (the gateway does not know session-only orders).
 <!-- SECTION:NOTES:END -->
