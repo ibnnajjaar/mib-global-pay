@@ -1,11 +1,11 @@
 ---
 id: TASK-14.1
 title: 'QA: build the QA harness app for browser testing'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-08 11:09'
-updated_date: '2026-11-08 11:31'
+updated_date: '2026-11-08 13:10'
 labels:
   - qa
 dependencies: []
@@ -69,12 +69,12 @@ A new sibling project at `~/Herd/mib-qa` (its own git repository; never commit i
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `{APP}/qa` loads, and creating an invoice shows it in the list
-- [ ] #2 The package is installed from the local checkout by path, and its migrations have run
-- [ ] #3 Each harness route and action listed in the description exists and shows its result with a data-testid
-- [ ] #4 A queue worker is running, and a test event dispatched from tinker appears in qa_events
-- [ ] #5 The webhook URL (`MibGlobalPay::webhookUrl()`) is a public HTTPS URL, or the notes say no tunnel was approved
-- [ ] #6 No credential value appears in the harness repository, notes or screenshots
+- [x] #1 `{APP}/qa` loads, and creating an invoice shows it in the list
+- [x] #2 The package is installed from the local checkout by path, and its migrations have run
+- [x] #3 Each harness route and action listed in the description exists and shows its result with a data-testid
+- [x] #4 A queue worker is running, and a test event dispatched from tinker appears in qa_events
+- [x] #5 The webhook URL (`MibGlobalPay::webhookUrl()`) is a public HTTPS URL, or the notes say no tunnel was approved
+- [x] #6 No credential value appears in the harness repository, notes or screenshots
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -105,4 +105,19 @@ Tunnel: the first domain belonged to another ngrok account. Now lerd share --ngr
 Harness pages built: /qa dashboard (invoices, attempts, actions, events, notifications, with data-testids), /qa/invoices/{id}/pay (operation, locale, save_card, token, three_ds, csc, retry_redirect, logo, display options), /qa/invoices/{id}/link (days, minutes, attempts), /qa/attempts/{order}/show (mode, session), POST /qa/attempts/{order}/action (retrieve_order, capture, refund, void, reverse, delete_link, retrieve_token, delete_token, confirm_unpaid), POST /qa/reconcile, /qa/retry-landing.
 Harness fix: signed /mib/pay links gave 403 through the tunnel because lerd's nginx sends X-Forwarded-Port: 80. bootstrap/app.php now trusts proxies for X-Forwarded-For/Host/Proto only. Not a package issue.
 First real gateway call: startCheckout(INV-0001, 10.00 MVR) created session for QA-INV-0001-1 (state live, successIndicator stored). /mib/pay/{order} loads checkout.min.js from the test gateway and calls Checkout.configure + showPaymentPage. Tampered signature gives 403.
+
+Verification 2026-11-08 (closing):
+- AC1: through the tunnel, GET /qa returns 200; posting the invoice form (25.50 MVR) redirects and the dashboard shows action-result 'Created INV-0002 for 25.50 MVR' and row invoice-INV-0002.
+- AC2: package from path ../mib-global-pay (symlink, 2.x-dev); package migrations published and run (checkout attempts and notifications tables in use by TASK-14.4).
+- AC3: routes /qa, /qa/invoices, /qa/invoices/{id}/pay, /link, /qa/attempts/{order}/show, /action, /qa/reconcile, /qa/retry-landing exist; every action button and result has a data-testid (action-result, refusal-reason, payment-link, retry-landing, checkout-target...).
+- AC4: queue worker lerd-queue-mib-qa running; qa-scripts/14.1-queued-test-event.php queues a closure that fires UnknownOrderNotification; the worker recorded it in qa_events within 1 s.
+- AC5: MibGlobalPay::webhookUrl() = https://excavator-splurge-granite.ngrok-free.dev/mib/webhook (ngrok static domain via lerd share); the gateway's real notifications reach it (TASK-14.4).
+- AC6: the API password and webhook secret values were searched for (by value, never printed) in mib-qa tracked files, full git history, ignored files (excluding .env and vendor) and this package's repo and history: 0 hits.
+- Harness also has qa-scripts/bootstrap.php for one-off scripts run with: podman exec -w ~/Herd/mib-qa lerd-php85-fpm php qa-scripts/<name>.php
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Built the QA harness at ~/Herd/mib-qa (Laravel 13.40, PHP 8.5, SQLite, database queue, lerd site, ngrok tunnel): Invoice payable, qa_events recorder, /qa dashboard with pay/link/show routes and gateway actions, all with data-testids. Verified by creating an invoice through the tunnel, a queued test event reaching qa_events, the gateway's real webhooks reaching the public URL, and a by-value credential scan with 0 hits.
+<!-- SECTION:FINAL_SUMMARY:END -->
