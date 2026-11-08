@@ -276,6 +276,15 @@ it('creates a payment link', function () {
         ->and($body['paymentLink']['numberOfAllowedAttempts'])->toBe(3);
 });
 
+it('sends 25 attempts on a payment link started without a count', function () {
+    $fake = MibGlobalPay::fake();
+
+    MibGlobalPay::startPaymentLink(managedInvoice(), new DateTimeImmutable('+7 days'));
+
+    $body = $fake->sent(InitiatePaymentLink::class)[0]->body(app(\IbnNajjaar\MIBGlobalPay\Core\Config\GatewayConfig::class));
+    expect($body['paymentLink']['numberOfAllowedAttempts'])->toBe(25);
+});
+
 it('explains a payment link error using known codes only', function (string $code, string $text) {
     $this->get('/mib/link-error?errorCode=' . $code . '&errorDescription=%3Cscript%3E')
         ->assertOk()->assertSee($text)->assertDontSee('<script>', false);

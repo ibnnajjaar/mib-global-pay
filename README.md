@@ -302,6 +302,10 @@ $link->url;                              // share this
 $gateway->deletePaymentLink($link->id);  // if it is no longer needed
 ```
 
+The attempt count is always sent: 25 (`CheckoutRequest::DEFAULT_PAYMENT_LINK_ATTEMPTS`) when you pass none, because
+the MIB gateway rejects a link without it. Payment links must also be enabled for your merchant; the MIB test merchant
+refuses them with "MSO does not support privilege PAYMENT_LINK".
+
 ### Reversing a capture
 
 ```php

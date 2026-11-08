@@ -19,6 +19,12 @@ final class CheckoutRequest
 {
     private const int MAX_CUSTOM_FIELDS = 50;
 
+    /**
+     * Sent as paymentLink.numberOfAllowedAttempts when the caller gives no count. The docs call 25
+     * the gateway default, but the MIB gateway rejects a link without the field (2026-11-08).
+     */
+    public const int DEFAULT_PAYMENT_LINK_ATTEMPTS = 25;
+
     private InteractionOperation $operation = InteractionOperation::Purchase;
 
     private ?string $description = null;
@@ -575,9 +581,10 @@ final class CheckoutRequest
 
     /**
      * Makes this a Payment Link request (checkoutMode PAYMENT_LINK), sent with the payment link
-     * client. The gateway defaults to 3 months and 25 attempts. It needs AUTHORIZE or PURCHASE, an
-     * order description and a merchant URL. On an error, the gateway sends the payer to $errorUrl
-     * with errorCode and errorDescription.
+     * client. The gateway defaults the expiry to 3 months. The attempt count is always sent, 25
+     * (DEFAULT_PAYMENT_LINK_ATTEMPTS) when $allowedAttempts is null, because the MIB gateway
+     * requires it. It needs AUTHORIZE or PURCHASE, an order description and a merchant URL. On an
+     * error, the gateway sends the payer to $errorUrl with errorCode and errorDescription.
      *
      * @throws InvalidRequest
      */
@@ -754,7 +761,7 @@ final class CheckoutRequest
 
         return [
             'expiryDateTime' => $expires,
-            'numberOfAllowedAttempts' => $this->paymentLinkAttempts,
+            'numberOfAllowedAttempts' => $this->paymentLinkAttempts ?? self::DEFAULT_PAYMENT_LINK_ATTEMPTS,
             'errorUrl' => Validate::url($this->paymentLinkErrorUrl, 'Payment link error URL', $config),
         ];
     }

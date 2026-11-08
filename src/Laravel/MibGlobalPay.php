@@ -104,7 +104,8 @@ final readonly class MibGlobalPay
 
     /**
      * Creates a shareable payment link for a model using the HasMibPayments trait. Share
-     * $attempt->paymentUrl().
+     * $attempt->paymentUrl(). It expires in 3 months and allows 25 attempts unless you pass other
+     * values.
      *
      * @param (\Closure(CheckoutRequest): CheckoutRequest)|null $customize adds anything else to the request
      *
