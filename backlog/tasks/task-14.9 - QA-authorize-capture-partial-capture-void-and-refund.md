@@ -1,9 +1,11 @@
 ---
 id: TASK-14.9
 title: 'QA: authorize, capture, partial capture, void and refund'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08 11:09'
+updated_date: '2026-11-08 13:22'
 labels:
   - qa
 dependencies:
@@ -60,3 +62,13 @@ As listed in each step. Every money event appears exactly once per transaction, 
 - [ ] #4 The void and reverseWithDerivedIds outcomes are recorded, and a second reversal call sends nothing new
 - [ ] #5 Voiding an authorization records VoidProcessed and allows a new checkout
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Run 2026-11-08 ~18:19 +05:00.
+Steps 1-4 and 8 (AUTHORIZE, partial and final capture, void of an authorization) CANNOT run on this merchant: /qa/invoices/6/pay?operation=authorize (INV-0006, 100.00 MVR) returns HTTP 500 from the harness because Initiate Checkout is refused: HTTP 400 {"error":{"cause":"INVALID_REQUEST","explanation":"Value AUTHORIZE is invalid. Merchant TESTIUMMPGS is not enabled for AUTHORIZE., please contact your Service Provider for expected values.","field":"interaction.operation","validationType":"INVALID"},"result":"ERROR"}. startCheckout() threw GatewayException(400) and left no attempt row for INV-0006 (good). Matches TASK-14.2 (supportedPaymentOperations = PURCHASE only). MIB must enable AUTHORIZE/CAPTURE on TESTIUMMPGS to test these.
+FINDING (minor): Core\Exceptions\OperationNotEnabled ('The operation is not enabled for this merchant') exists but nothing throws it; this gateway refusal surfaces as a generic GatewayException 400 with field interaction.operation. A host cannot tell it apart without parsing error.field.
+Step 6 (void straight after a purchase): dashboard 'void' on the paid QA-INV-0001-1 (purchased 16:35, same acquirer batch day) -> result=SUCCESS gatewayCode=APPROVED type=VOID_PAYMENT txn=void-9db91923193109c7 amount=10.00 orderStatus=CANCELLED. The VOID webhook (notification 610c707ea7, attempt 1) arrived ~50 s later and recorded VoidProcessed and PaymentReversed once each (source webhook, each with a deliveryKey); attempt reversed_at set. A replay of that notification added nothing. Harness note: invoices.paid_at stays set because the harness listener does not clear it on PaymentReversed (harness, not package); payableState() is what a host should read.
+Steps 5 (partial refund) and 7 (reverseWithDerivedIds twice) need another paid order; blocked by the gateway's Hosted Checkout outage (TASK-14.5). Kept In Progress.
+<!-- SECTION:NOTES:END -->

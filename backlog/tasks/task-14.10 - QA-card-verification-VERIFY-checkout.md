@@ -1,9 +1,11 @@
 ---
 id: TASK-14.10
 title: 'QA: card verification (VERIFY) checkout'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08 11:09'
+updated_date: '2026-11-08 13:22'
 labels:
   - qa
 dependencies:
@@ -53,3 +55,9 @@ ordinal: 14010
 - [ ] #2 No money is captured on the order, and no PaymentCaptured is recorded
 - [ ] #3 If VERIFY is not enabled, the gateway's error is recorded instead
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Run 2026-11-08 ~18:19 +05:00. /qa/invoices/7/pay?operation=verify (INV-0007, 10.00 MVR) -> 302 to /mib/pay/QA-INV-0007-1; attempt operation VERIFY, state live. Unlike AUTHORIZE, the gateway ACCEPTED a VERIFY session although Payment Options Inquiry lists only PURCHASE: Retrieve Session shows interaction.operation VERIFY, order.amount 10.00 MVR. Completing it in the browser is blocked by the gateway's Hosted Checkout outage (TASK-14.5). Kept In Progress.
+<!-- SECTION:NOTES:END -->
