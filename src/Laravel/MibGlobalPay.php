@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace IbnNajjaar\MIBGlobalPay\Laravel;
 
-use Illuminate\Routing\Router;
+use Illuminate\Database\Eloquent\Model;
 use IbnNajjaar\MIBGlobalPay\Core\Money\Money;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Routing\UrlGenerator;
@@ -19,8 +19,13 @@ use IbnNajjaar\MIBGlobalPay\Laravel\Support\WebhookRoute;
 use IbnNajjaar\MIBGlobalPay\Core\Attempts\ResolvedAttempt;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\CheckoutRequest;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
+use IbnNajjaar\MIBGlobalPay\Laravel\Models\CheckoutAttempt;
 use IbnNajjaar\MIBGlobalPay\Core\Contracts\OrderIdGenerator;
+use IbnNajjaar\MIBGlobalPay\Laravel\Checkout\CheckoutStarter;
 use IbnNajjaar\MIBGlobalPay\Laravel\Outcome\OutcomeProcessor;
+use IbnNajjaar\MIBGlobalPay\Laravel\Checkout\AttemptNotUnpaid;
+use IbnNajjaar\MIBGlobalPay\Core\Requests\InteractionOperation;
+use IbnNajjaar\MIBGlobalPay\Laravel\Checkout\CheckoutNotAllowed;
 use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationResult;
 
 /**
@@ -31,13 +36,12 @@ use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationResult;
  */
 final readonly class MibGlobalPay
 {
-    public const WEBHOOK_ROUTE_NAME = 'mib-global-pay.webhook';
+    public const string WEBHOOK_ROUTE_NAME = 'mib-global-pay.webhook';
 
     public function __construct(
         private Gateway $gateway,
         private Settings $settings,
         private OrderIdGenerator $orderIds,
-        private Router $router,
         private UrlGenerator $urls,
         private WebhookRoute $webhookRoute,
         private Container $container,
@@ -73,10 +77,12 @@ final readonly class MibGlobalPay
      *
      * @throws InvalidRequest
      */
-    public function newCheckoutRequest(string $orderId, Money $amount, string $merchantName, string $returnUrl): CheckoutRequest
+    public function newCheckoutRequest(string $orderId, Money $amount, string $merchantName, string $returnUrl, bool $verification = false): CheckoutRequest
     {
-        $request = CheckoutRequest::create($orderId, $amount, $merchantName, $returnUrl)
-            ->withTimeout($this->settings->checkoutTimeoutSeconds());
+        $request = $verification
+            ? CheckoutRequest::forVerification($orderId, $amount, $merchantName, $returnUrl)
+            : CheckoutRequest::create($orderId, $amount, $merchantName, $returnUrl);
+        $request = $request->withTimeout($this->settings->checkoutTimeoutSeconds());
 
         $url = $this->webhookUrl();
 
@@ -84,18 +90,57 @@ final readonly class MibGlobalPay
     }
 
     /**
+     * Starts a payment for a model using the HasMibPayments trait. Send the payer to
+     * $attempt->paymentUrl(); the package handles the rest and dispatches the usual events.
+     *
+     * @param (\Closure(CheckoutRequest): CheckoutRequest)|null $customize adds anything else to the request
+     *
+     * @throws CheckoutNotAllowed
+     */
+    public function startCheckout(Payable&Model $payable, InteractionOperation $operation = InteractionOperation::Purchase, ?\Closure $customize = null): CheckoutAttempt
+    {
+        return $this->container->make(CheckoutStarter::class)->checkout($payable, $operation, $customize);
+    }
+
+    /**
+     * Creates a shareable payment link for a model using the HasMibPayments trait. Share
+     * $attempt->paymentUrl().
+     *
+     * @param (\Closure(CheckoutRequest): CheckoutRequest)|null $customize adds anything else to the request
+     *
+     * @throws CheckoutNotAllowed
+     */
+    public function startPaymentLink(
+        Payable&Model $payable,
+        ?\DateTimeInterface $expiresAt = null,
+        ?int $allowedAttempts = null,
+        InteractionOperation $operation = InteractionOperation::Purchase,
+        ?\Closure $customize = null,
+    ): CheckoutAttempt {
+        return $this->container->make(CheckoutStarter::class)->paymentLink($payable, $expiresAt, $allowedAttempts, $operation, $customize);
+    }
+
+    /**
+     * A person's decision that an unresolved attempt was not charged, which lets a new attempt
+     * start. The gateway is asked once more first, and mib:reconcile keeps watching for a late charge.
+     *
+     * @throws AttemptNotUnpaid when the gateway reports money held or captured, or another result
+     */
+    public function confirmUnpaid(CheckoutAttempt $attempt, string $confirmedBy, ?string $reason = null): void
+    {
+        $this->container->make(CheckoutStarter::class)->confirmUnpaid($attempt, $confirmedBy, $reason);
+    }
+
+    /**
      * The absolute URL of the webhook route, if it is registered. Works whatever name prefix or
-     * domain a host group gives the route registered with Route::mibGlobalPayWebhook().
+     * domain a host group gives the route registered with Route::mibGlobalPayWebhook(), with or
+     * without route:cache. With several such routes, the last one registered wins.
      */
     public function webhookUrl(): ?string
     {
         $route = $this->webhookRoute->route();
 
-        if ($route !== null) {
-            return $this->urls->toRoute($route, [], true);
-        }
-
-        return $this->router->has(self::WEBHOOK_ROUTE_NAME) ? $this->urls->route(self::WEBHOOK_ROUTE_NAME) : null;
+        return $route === null ? null : $this->urls->toRoute($route, [], true);
     }
 
     /** created_at + checkout timeout + grace: the attempts.expires_at value. */

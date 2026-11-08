@@ -13,8 +13,8 @@ use IbnNajjaar\MIBGlobalPay\Core\Verification\HostedCheckoutReturn;
 
 /**
  * Runs the outcome pipeline for the return URL and for manual checks, so the host has one
- * code path for webhook, return URL and admin. The business-level dedupe makes the return URL
- * racing the webhook harmless.
+ * code path for webhook, return URL and admin. The business-level dedupe stops repeats, and a
+ * listener idempotent on deliveryKey covers the return URL overlapping the webhook.
  */
 final readonly class PaymentOutcome
 {

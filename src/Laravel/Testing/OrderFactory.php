@@ -49,14 +49,26 @@ final class OrderFactory
     }
 
     /**
-     * A PAYMENT still pending at the gateway.
+     * A PAYMENT still pending at the gateway, by default since just now.
      *
      * @return array<string, mixed>
      */
-    public static function pending(Money $amount, ?string $orderId = null): array
+    public static function pending(Money $amount, ?string $orderId = null, ?\DateTimeInterface $since = null): array
     {
         return self::order($orderId, $amount, 'INITIATED', captured: Money::ofMinor(0, $amount->currency), transactions: [
-            self::transaction('1', 'PAYMENT', $amount, 'PENDING', 'PENDING'),
+            ['timeOfRecord' => ($since ?? new \DateTimeImmutable())->format('Y-m-d\TH:i:s.v\Z')] + self::transaction('1', 'PAYMENT', $amount, 'PENDING', 'PENDING'),
+        ]);
+    }
+
+    /**
+     * A PAYMENT the gateway got no answer for from the acquirer, by default just now.
+     *
+     * @return array<string, mixed>
+     */
+    public static function timedOut(Money $amount, ?string $orderId = null, ?\DateTimeInterface $since = null): array
+    {
+        return self::order($orderId, $amount, 'FAILED', captured: Money::ofMinor(0, $amount->currency), transactions: [
+            ['timeOfRecord' => ($since ?? new \DateTimeImmutable())->format('Y-m-d\TH:i:s.v\Z')] + self::transaction('1', 'PAYMENT', $amount, 'FAILURE', 'TIMED_OUT'),
         ]);
     }
 
@@ -96,6 +108,44 @@ final class OrderFactory
         return self::order($orderId, $amount, 'CANCELLED', captured: $amount, transactions: [
             self::transaction('1', 'PAYMENT', $amount),
             self::transaction('void-1', 'VOID_PAYMENT', null, target: '1'),
+        ]);
+    }
+
+    /**
+     * An approved authorization, partly captured.
+     *
+     * @return array<string, mixed>
+     */
+    public static function partiallyCaptured(Money $amount, Money $captured, ?string $orderId = null): array
+    {
+        return self::order($orderId, $amount, 'PARTIALLY_CAPTURED', authorized: $amount, captured: $captured, transactions: [
+            self::transaction('1', 'AUTHORIZATION', $amount),
+            self::transaction('capture-1', 'CAPTURE', $captured),
+        ]);
+    }
+
+    /**
+     * An approved authorization, later voided.
+     *
+     * @return array<string, mixed>
+     */
+    public static function authorizationVoided(Money $amount, ?string $orderId = null): array
+    {
+        return self::order($orderId, $amount, 'CANCELLED', authorized: $amount, transactions: [
+            self::transaction('1', 'AUTHORIZATION', $amount),
+            self::transaction('void-1', 'VOID_AUTHORIZATION', null, target: '1'),
+        ]);
+    }
+
+    /**
+     * An approved account verification. No money moved.
+     *
+     * @return array<string, mixed>
+     */
+    public static function verified(Money $amount, ?string $orderId = null): array
+    {
+        return self::order($orderId, $amount, 'VERIFIED', transactions: [
+            self::transaction('1', 'VERIFICATION', null),
         ]);
     }
 

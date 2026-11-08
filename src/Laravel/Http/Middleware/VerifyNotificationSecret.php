@@ -23,7 +23,7 @@ use IbnNajjaar\MIBGlobalPay\Core\Exceptions\ConfigurationException;
  */
 final readonly class VerifyNotificationSecret
 {
-    public const ATTRIBUTE = 'mib-global-pay.notification';
+    public const string ATTRIBUTE = 'mib-global-pay.notification';
 
     public function __construct(
         private Settings $settings,

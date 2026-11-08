@@ -10,6 +10,7 @@ use IbnNajjaar\MIBGlobalPay\Core\Support\Payload;
 use IbnNajjaar\MIBGlobalPay\Core\Contracts\Operation;
 use IbnNajjaar\MIBGlobalPay\Core\Config\GatewayConfig;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\CheckoutRequest;
+use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
 use IbnNajjaar\MIBGlobalPay\Core\Responses\CheckoutSession;
 
 /**
@@ -41,6 +42,10 @@ final readonly class InitiateCheckout implements Operation
 
     public function body(GatewayConfig $config): array
     {
+        if ($this->request->isPaymentLink()) {
+            throw new InvalidRequest('This request is a payment link: send it with paymentLinks()->create()');
+        }
+
         return $this->request->toBody($config);
     }
 

@@ -46,14 +46,27 @@ final class InMemoryNotificationStore implements NotificationStore
 
     public function claimTransaction(string $orderId, string $transactionId, string $outcome): bool
     {
-        $key = json_encode([$orderId, $transactionId, $outcome], JSON_THROW_ON_ERROR);
-
-        if (isset($this->transactions[$key])) {
+        if ($this->wasDelivered($orderId, $transactionId, $outcome)) {
             return false;
         }
 
-        $this->transactions[$key] = true;
+        $this->markDelivered($orderId, $transactionId, $outcome);
 
         return true;
+    }
+
+    public function wasDelivered(string $orderId, string $transactionId, string $outcome): bool
+    {
+        return isset($this->transactions[$this->transactionKey($orderId, $transactionId, $outcome)]);
+    }
+
+    public function markDelivered(string $orderId, string $transactionId, string $outcome): void
+    {
+        $this->transactions[$this->transactionKey($orderId, $transactionId, $outcome)] = true;
+    }
+
+    private function transactionKey(string $orderId, string $transactionId, string $outcome): string
+    {
+        return json_encode([$orderId, $transactionId, $outcome], JSON_THROW_ON_ERROR);
     }
 }

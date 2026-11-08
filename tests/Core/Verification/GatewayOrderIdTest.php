@@ -72,3 +72,23 @@ it('generates transaction IDs', function () {
 
     TransactionId::generate('bad prefix');
 })->throws(InvalidRequest::class);
+
+it('derives the same transaction ID from the same parts, within 40 characters', function () {
+    $id = TransactionId::derive('refund', 'ORDER-1', '1');
+
+    expect($id)->toMatch('/^refund-[0-9a-f]{33}$/')
+        ->and(strlen($id))->toBe(40)
+        ->and(TransactionId::derive('refund', 'ORDER-1', '1'))->toBe($id)
+        ->and(TransactionId::derive('void', 'ORDER-1', '1'))->not->toBe($id)
+        ->and(TransactionId::derive('refund', 'ORDER-1', '2'))->not->toBe($id)
+        ->and(TransactionId::derive('refund', 'ORDER-11', '1'))->not->toBe(TransactionId::derive('refund', 'ORDER-1', '11'))
+        ->and(strlen(TransactionId::derive(str_repeat('p', 20), str_repeat('o', 200))))->toBe(40);
+});
+
+it('rejects a bad prefix or no parts when deriving a transaction ID', function (string $prefix, array $parts) {
+    expect(fn () => TransactionId::derive($prefix, ...$parts))->toThrow(InvalidRequest::class);
+})->with([
+    'bad prefix' => ['bad prefix', ['ORDER-1']],
+    'no parts' => ['void', []],
+    'empty part' => ['void', ['ORDER-1', '']],
+]);

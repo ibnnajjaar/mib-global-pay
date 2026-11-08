@@ -81,9 +81,9 @@ it('verifies an unexpired attempt and offers a live, unpaid one for reuse', func
         ->and($result->blockingAttempt)->toBe($live)
         ->and($h->history)->toHaveCount(1);
 })->with([
-    'live, not paid yet (unknown order)' => [AttemptState::Live, 404, [], true],
+    'live, not paid yet (unknown order)' => [AttemptState::Live, 404, GatewayHarness::errorBody(), true],
     'live, declined' => [AttemptState::Live, 200, orderBody('DECLINED', 'FAILURE', 0), true],
-    'created (response may have been lost)' => [AttemptState::Created, 404, [], false],
+    'created (response may have been lost)' => [AttemptState::Created, 404, GatewayHarness::errorBody(), false],
 ]);
 
 it('refuses with MoneyCaptured when the bank already captured a live attempt, and reports it', function () {
@@ -113,7 +113,7 @@ it('refuses with VerificationPending when a live attempt is pending', function (
 it('gives money captured on any attempt precedence over a live one', function () {
     $body = orderBody();
     $body['id'] = 'ISIMS-R-IUM-FN-2026-123-1';
-    [$guard] = guard([GatewayHarness::json(404, []), GatewayHarness::json(200, $body)]);
+    [$guard] = guard([GatewayHarness::notFound(), GatewayHarness::json(200, $body)]);
     $payable = new InMemoryPayable(amount(), attempts: [
         attempt(2, AttemptState::Live, '2026-10-28 12:30:00'),
         attempt(1, AttemptState::Expired),
@@ -135,7 +135,7 @@ it('supersedes a reversed attempt even before it expires', function () {
 });
 
 it('only returns attempts whose state may legally move to Superseded', function (AttemptState $state) {
-    [$guard] = guard([GatewayHarness::json(404, [])]);
+    [$guard] = guard([GatewayHarness::notFound()]);
     $old = attempt(1, $state);
 
     $result = $guard->canStartNewAttempt(new InMemoryPayable(amount(), attempts: [$old]));
@@ -159,7 +159,7 @@ it('allows a new attempt once the earlier one expired and verifies as not captur
         ->and($h->request()->getUri()->getPath())->toEndWith('/order/ISIMS-R-IUM-FN-2026-123-1');
 })->with([
     'declined' => [orderBody('DECLINED', 'FAILURE', 0), 200, VerificationStatus::NotCaptured],
-    'never paid (order unknown)' => [[], 404, VerificationStatus::NotFound],
+    'never paid (order unknown)' => [GatewayHarness::errorBody(), 404, VerificationStatus::NotFound],
     'reversed' => [orderBody() + ['totalRefundedAmount' => 1250.5], 200, VerificationStatus::Reversed],
 ]);
 
@@ -183,7 +183,7 @@ it('refuses while an expired attempt is still pending at the gateway', function 
 });
 
 it('skips failed and superseded attempts and numbers after the highest attempt', function () {
-    [$guard, $h] = guard([GatewayHarness::json(404, [])]);
+    [$guard, $h] = guard([GatewayHarness::notFound()]);
     $payable = new InMemoryPayable(amount(), attempts: [
         attempt(3, AttemptState::Expired),
         attempt(2, AttemptState::Superseded),
@@ -199,7 +199,7 @@ it('skips failed and superseded attempts and numbers after the highest attempt',
 });
 
 it('treats an attempt exactly at expiresAt as expired', function () {
-    [$guard] = guard([GatewayHarness::json(404, [])]);
+    [$guard] = guard([GatewayHarness::notFound()]);
 
     expect($guard->canStartNewAttempt(new InMemoryPayable(amount(), attempts: [attempt(1, AttemptState::Live, GUARD_NOW)]))->allowed)->toBeTrue();
 });

@@ -35,7 +35,7 @@ final readonly class PaymentOptions
         $types = $p->payload('paymentTypes');
 
         return new self(
-            paymentTypes: $types === null ? [] : array_map('strval', array_keys($types->raw())),
+            paymentTypes: $types === null ? [] : array_map(strval(...), array_keys($types->raw())),
             cardTypes: self::strings($p->list('paymentTypes.card.cardTypes'), 'cardType'),
             cardCurrencies: self::strings($p->list('paymentTypes.card.currencies'), 'currency'),
             payload: $p,

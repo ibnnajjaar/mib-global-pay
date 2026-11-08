@@ -76,3 +76,43 @@ function webhookServer(string $id = 'NOTIF-1', ?string $secret = LARAVEL_SECRET)
 
     return $server;
 }
+
+/** The lock README and DESIGN-v2.md document for a host: DB::transaction on the default connection. */
+function transactionalPayable(InMemoryPayable $inner): IbnNajjaar\MIBGlobalPay\Core\Attempts\Payable
+{
+    return new class ($inner) implements IbnNajjaar\MIBGlobalPay\Core\Attempts\Payable {
+        public function __construct(private InMemoryPayable $inner)
+        {
+        }
+
+        public function payableReference(): string
+        {
+            return $this->inner->payableReference();
+        }
+
+        public function expectedAmount(): IbnNajjaar\MIBGlobalPay\Core\Money\Money
+        {
+            return $this->inner->expectedAmount();
+        }
+
+        public function payableState(): PayableState
+        {
+            return $this->inner->payableState();
+        }
+
+        public function settledBy(): ?IbnNajjaar\MIBGlobalPay\Core\Attempts\Settlement
+        {
+            return $this->inner->settledBy();
+        }
+
+        public function attempts(): iterable
+        {
+            return $this->inner->attempts();
+        }
+
+        public function lock(Closure $callback): mixed
+        {
+            return Illuminate\Support\Facades\DB::transaction($callback);
+        }
+    };
+}

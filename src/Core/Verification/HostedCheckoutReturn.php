@@ -8,6 +8,9 @@ namespace IbnNajjaar\MIBGlobalPay\Core\Verification;
  * The query parameters on the return URL after Hosted Checkout.
  *
  * A matching indicator only means "go and call verifyCapture()". It is never proof of payment.
+ *
+ * The gateway documents only resultIndicator. sessionVersion and order (orderId) are read if they
+ * are present, but may be absent, so put the order ID in your own return URL if you need it.
  */
 final readonly class HostedCheckoutReturn
 {

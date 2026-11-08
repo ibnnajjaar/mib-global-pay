@@ -1,6 +1,6 @@
 {
     "name": "ibnnajjaar/mib-global-pay",
-    "description": "PHP 8.4+ client for MIB Global Pay (Mastercard Gateway Hosted Checkout), with an optional Laravel 13 layer",
+    "description": "PHP 8.4+ client for MIB Global Pay (Mastercard Gateway Hosted Checkout), with an optional Laravel 12 and 13 layer",
     "keywords": [
         "ibnnajjaar",
         "mib-global-pay",
@@ -34,12 +34,16 @@
     "require-dev": {
         "larastan/larastan": "^3.0",
         "laravel/pint": "^1.18",
-        "orchestra/testbench": "^11.0",
+        "orchestra/testbench": "^10.0 || ^11.0",
         "pestphp/pest": "^4.0",
-        "phpstan/phpstan": "^2.1"
+        "phpstan/phpstan": "^2.1",
+        "rector/rector": "^2.0"
+    },
+    "conflict": {
+        "laravel/framework": "<12.0 || >=14.0"
     },
     "suggest": {
-        "illuminate/support": "Required (^13.0) for the optional Laravel 13 integration layer"
+        "illuminate/support": "Required (^12.0 || ^13.0) for the optional Laravel 12 and 13 integration layer"
     },
     "autoload": {
         "psr-4": {
@@ -56,7 +60,9 @@
         "test-coverage": "vendor/bin/pest --coverage-clover=coverage.xml",
         "format": "vendor/bin/pint",
         "lint": "vendor/bin/pint --test",
-        "analyse": "vendor/bin/phpstan analyse --memory-limit=1G"
+        "analyse": "vendor/bin/phpstan analyse --memory-limit=1G",
+        "refactor": "vendor/bin/rector process",
+        "refactor-check": "vendor/bin/rector process --dry-run"
     },
     "config": {
         "sort-packages": true,

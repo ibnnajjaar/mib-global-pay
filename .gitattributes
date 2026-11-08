@@ -1,0 +1,15 @@
+# Left out of `git archive` and Composer dist installs. A source checkout keeps all of these.
+/.editorconfig export-ignore
+/.gitattributes export-ignore
+/.github export-ignore
+/.gitignore export-ignore
+/AGENTS.md export-ignore
+/CLAUDE.md export-ignore
+/DESIGN-v2.md export-ignore
+/WORKFLOW.md export-ignore
+/backlog export-ignore
+/phpstan.neon.dist export-ignore
+/phpunit.xml export-ignore
+/pint.json export-ignore
+/rector.php export-ignore
+/tests export-ignore

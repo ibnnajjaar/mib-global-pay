@@ -77,6 +77,12 @@ final readonly class TransactionNotification implements Notification
         return $this->transaction->type->movesMoneyIn();
     }
 
+    /** AUTHORIZATION or VERIFICATION: confirm with verifyCapture(). */
+    public function isAuthorizationOrVerification(): bool
+    {
+        return $this->transaction->type->isAuthorizationOrVerification();
+    }
+
     public function isRefund(): bool
     {
         return $this->transaction->type === TransactionType::Refund;

@@ -6,10 +6,13 @@ namespace IbnNajjaar\MIBGlobalPay\Core\Contracts;
 
 use IbnNajjaar\MIBGlobalPay\Core\Money\Money;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\OrderClient;
+use IbnNajjaar\MIBGlobalPay\Core\Clients\TokenClient;
 use IbnNajjaar\MIBGlobalPay\Core\Config\GatewayConfig;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\GatewayClient;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\SessionClient;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\CheckoutClient;
+use IbnNajjaar\MIBGlobalPay\Core\Clients\AgreementClient;
+use IbnNajjaar\MIBGlobalPay\Core\Clients\PaymentLinkClient;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\GatewayException;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\MalformedPayload;
@@ -42,7 +45,8 @@ interface Gateway
 
     /**
      * Re-read the order from the gateway and check it is captured for exactly $expected,
-     * using the configured ApprovalPolicy. An unknown order gives NotFound, not an exception.
+     * using the configured ApprovalPolicy. An unknown order gives NotFound, not an exception. A 400
+     * or 404 that is not a recognised gateway error throws, so a wrong host never reads as unpaid.
      *
      * @throws InvalidRequest
      * @throws GatewayException  for errors other than "order not found"
@@ -58,4 +62,10 @@ interface Gateway
     public function orders(): OrderClient;
 
     public function gateway(): GatewayClient;
+
+    public function tokens(): TokenClient;
+
+    public function paymentLinks(): PaymentLinkClient;
+
+    public function agreements(): AgreementClient;
 }

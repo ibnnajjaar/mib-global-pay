@@ -12,6 +12,9 @@ namespace IbnNajjaar\MIBGlobalPay\Core\Exceptions;
  */
 final class GatewayException extends \RuntimeException implements MibGlobalPayException
 {
+    /** The documented values of error.cause, which are case sensitive. */
+    private const array CAUSES = ['INVALID_REQUEST', 'REQUEST_REJECTED', 'SERVER_BUSY', 'SERVER_FAILED'];
+
     /**
      * @param array<string, mixed> $error the decoded "error" object of the response, if any
      */
@@ -79,6 +82,24 @@ final class GatewayException extends \RuntimeException implements MibGlobalPayEx
     public function isAuthenticationError(): bool
     {
         return $this->httpStatus === 401;
+    }
+
+    /**
+     * Whether the raw body has the documented error format: a JSON object with result ERROR and an
+     * error object whose cause is a documented value. Anything else, such as an HTML page from a
+     * wrong host or a proxy, or some other JSON, says nothing about the request or the order.
+     */
+    public function isGatewayError(): bool
+    {
+        $body = json_decode($this->rawBody ?? '', true);
+
+        if (! is_array($body) || ($body['result'] ?? null) !== 'ERROR') {
+            return false;
+        }
+
+        $error = $body['error'] ?? null;
+
+        return is_array($error) && in_array($error['cause'] ?? null, self::CAUSES, true);
     }
 
     private function errorString(string $key): ?string

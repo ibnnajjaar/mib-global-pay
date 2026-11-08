@@ -18,22 +18,32 @@ use Psr\Http\Message\RequestFactoryInterface;
 use IbnNajjaar\MIBGlobalPay\Core\Http\Redactor;
 use IbnNajjaar\MIBGlobalPay\Core\Http\PathScope;
 use IbnNajjaar\MIBGlobalPay\Core\Money\Currency;
+use IbnNajjaar\MIBGlobalPay\Core\Http\HttpMethod;
 use IbnNajjaar\MIBGlobalPay\Core\Support\Payload;
 use IbnNajjaar\MIBGlobalPay\Core\Http\RetryPolicy;
 use IbnNajjaar\MIBGlobalPay\Core\Contracts\Gateway;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\OrderClient;
+use IbnNajjaar\MIBGlobalPay\Core\Clients\TokenClient;
 use IbnNajjaar\MIBGlobalPay\Core\Contracts\Operation;
 use IbnNajjaar\MIBGlobalPay\Core\Config\GatewayConfig;
+use IbnNajjaar\MIBGlobalPay\Core\Responses\PlanOffers;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\GatewayClient;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\SessionClient;
+use IbnNajjaar\MIBGlobalPay\Core\Responses\PaymentLink;
 use IbnNajjaar\MIBGlobalPay\Core\Clients\CheckoutClient;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\SessionUpdate;
+use IbnNajjaar\MIBGlobalPay\Core\Requests\StoredPayment;
+use IbnNajjaar\MIBGlobalPay\Core\Responses\TokenDetails;
+use IbnNajjaar\MIBGlobalPay\Core\Clients\AgreementClient;
 use IbnNajjaar\MIBGlobalPay\Core\Responses\GatewayStatus;
 use IbnNajjaar\MIBGlobalPay\Core\Responses\OrderResponse;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\CheckoutRequest;
 use IbnNajjaar\MIBGlobalPay\Core\Responses\PaymentOptions;
 use IbnNajjaar\MIBGlobalPay\Core\Responses\SessionDetails;
+use IbnNajjaar\MIBGlobalPay\Core\Clients\PaymentLinkClient;
 use IbnNajjaar\MIBGlobalPay\Core\Responses\CheckoutSession;
+use IbnNajjaar\MIBGlobalPay\Core\Responses\OperationResult;
+use IbnNajjaar\MIBGlobalPay\Core\Responses\AgreementDetails;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\GatewayException;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\MalformedPayload;
 use IbnNajjaar\MIBGlobalPay\Core\Verification\CaptureVerifier;
@@ -48,30 +58,30 @@ use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationResult;
  * A custom client is responsible for its own timeouts. Request and response bodies are logged
  * at debug level with secrets redacted.
  */
-final class MibGateway implements Gateway
+final readonly class MibGateway implements Gateway
 {
-    private readonly ClientInterface $http;
+    private ClientInterface $http;
 
-    private readonly RequestFactoryInterface $requests;
+    private RequestFactoryInterface $requests;
 
-    private readonly StreamFactoryInterface $streams;
+    private StreamFactoryInterface $streams;
 
-    private readonly LoggerInterface $logger;
+    private LoggerInterface $logger;
 
     /** @var \Closure(int): void */
-    private readonly \Closure $sleep;
+    private \Closure $sleep;
 
     /**
      * @param RetryPolicy|null       $retryPolicy opt-in; applies to idempotent operations only
      * @param (\Closure(int): void)|null $sleep   receives milliseconds; injectable for tests
      */
     public function __construct(
-        private readonly GatewayConfig $config,
+        private GatewayConfig $config,
         ?ClientInterface $httpClient = null,
         ?RequestFactoryInterface $requestFactory = null,
         ?StreamFactoryInterface $streamFactory = null,
         ?LoggerInterface $logger = null,
-        private readonly ?RetryPolicy $retryPolicy = null,
+        private ?RetryPolicy $retryPolicy = null,
         ?\Closure $sleep = null,
     ) {
         $factory = new HttpFactory();
@@ -149,7 +159,11 @@ final class MibGateway implements Gateway
             }
 
             if ($status < 200 || $status >= 300) {
-                throw $this->gatewayException($response, $rawBody, $decoded);
+                throw $this->gatewayException($request, $response, $rawBody, $decoded);
+            }
+
+            if ($operation->method() === HttpMethod::Delete && trim($rawBody) === '') {
+                $decoded = [];
             }
 
             if (! is_array($decoded)) {
@@ -175,6 +189,21 @@ final class MibGateway implements Gateway
         }
 
         return $verifier->verify($order, $expected);
+    }
+
+    public function tokens(): TokenClient
+    {
+        return new TokenClient($this);
+    }
+
+    public function paymentLinks(): PaymentLinkClient
+    {
+        return new PaymentLinkClient($this);
+    }
+
+    public function agreements(): AgreementClient
+    {
+        return new AgreementClient($this);
     }
 
     public function checkout(): CheckoutClient
@@ -227,9 +256,12 @@ final class MibGateway implements Gateway
         return $this->orders()->retrieveTransaction($orderId, $transactionId);
     }
 
-    public function capture(string $orderId, string $transactionId, Money $amount, ?string $reference = null): TransactionResponse
+    /**
+     * @param array<string, mixed> $extraFields updated order data, such as a new shipping address
+     */
+    public function capture(string $orderId, string $transactionId, Money $amount, ?string $reference = null, array $extraFields = []): TransactionResponse
     {
-        return $this->orders()->capture($orderId, $transactionId, $amount, $reference);
+        return $this->orders()->capture($orderId, $transactionId, $amount, $reference, $extraFields);
     }
 
     public function refund(
@@ -250,6 +282,56 @@ final class MibGateway implements Gateway
     public function updateAuthorization(string $orderId, string $transactionId, ?Money $amount = null, ?string $reference = null): TransactionResponse
     {
         return $this->orders()->updateAuthorization($orderId, $transactionId, $amount, $reference);
+    }
+
+    public function pay(string $orderId, string $transactionId, Money $amount, StoredPayment $payment, ?string $reference = null): TransactionResponse
+    {
+        return $this->orders()->pay($orderId, $transactionId, $amount, $payment, $reference);
+    }
+
+    public function authorize(string $orderId, string $transactionId, Money $amount, StoredPayment $payment, ?string $reference = null): TransactionResponse
+    {
+        return $this->orders()->authorize($orderId, $transactionId, $amount, $payment, $reference);
+    }
+
+    public function verifyAccount(string $orderId, string $transactionId, Currency $currency, StoredPayment $payment, ?string $reference = null): TransactionResponse
+    {
+        return $this->orders()->verify($orderId, $transactionId, $currency, $payment, $reference);
+    }
+
+    public function referral(string $orderId, string $transactionId, string $authorizationCode, ?string $reference = null): TransactionResponse
+    {
+        return $this->orders()->referral($orderId, $transactionId, $authorizationCode, $reference);
+    }
+
+    public function createPaymentLink(CheckoutRequest $request): PaymentLink
+    {
+        return $this->paymentLinks()->create($request);
+    }
+
+    public function deletePaymentLink(string $linkId): OperationResult
+    {
+        return $this->paymentLinks()->delete($linkId);
+    }
+
+    public function retrieveToken(string $token): TokenDetails
+    {
+        return $this->tokens()->retrieve($token);
+    }
+
+    public function deleteToken(string $token): OperationResult
+    {
+        return $this->tokens()->delete($token);
+    }
+
+    public function retrieveAgreement(string $agreementId): AgreementDetails
+    {
+        return $this->agreements()->retrieve($agreementId);
+    }
+
+    public function planOffers(string $planId, Money $amount, int $numberOfPayments, string $token): PlanOffers
+    {
+        return $this->gateway()->planOffers($planId, $amount, $numberOfPayments, $token);
     }
 
     public function checkGateway(): GatewayStatus
@@ -291,14 +373,26 @@ final class MibGateway implements Gateway
         return $request;
     }
 
-    private function gatewayException(ResponseInterface $response, string $rawBody, mixed $decoded): GatewayException
+    private function gatewayException(RequestInterface $request, ResponseInterface $response, string $rawBody, mixed $decoded): GatewayException
     {
+        $status = $response->getStatusCode();
         $error = is_array($decoded) && isset($decoded['error']) && is_array($decoded['error']) ? $decoded['error'] : [];
         /** @var array<string, mixed> $error */
         $explanation = $error['explanation'] ?? $error['cause'] ?? null;
-        $message = is_string($explanation) && $explanation !== '' ? $explanation : 'HTTP ' . $response->getStatusCode();
+        $message = is_string($explanation) && $explanation !== '' ? $explanation : 'HTTP ' . $status;
+        $exception = new GatewayException($message, $status, $error, $rawBody);
 
-        return new GatewayException($message, $response->getStatusCode(), $error, $rawBody);
+        if (! in_array($status, [400, 404], true) || $exception->isGatewayError()) {
+            return $exception;
+        }
+
+        // These two statuses can mean "no such order", so say why this one does not. Only the host
+        // is named: the message reaches logs and consoles, and never carries the body or credentials.
+        return new GatewayException(sprintf(
+            'HTTP %d from %s: the response was not recognised as a gateway error, so it says nothing about the order. Check the configured gateway host, and that no proxy is answering in its place.',
+            $status,
+            $request->getUri()->getHost(),
+        ), $status, $error, $rawBody);
     }
 
     /**

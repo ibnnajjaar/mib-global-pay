@@ -1,10 +1,16 @@
-<div {{ $attributes->merge(['id' => 'mib-global-pay-checkout']) }}>
-    {{ $slot->isEmpty() ? __('Redirecting to the payment page…') : $slot }}
+@php
+    $targetId = $attributes->get('id', 'mib-global-pay-checkout');
+    $isPayment = $display === \IbnNajjaar\MIBGlobalPay\Core\Checkout\CheckoutDisplay::Payment;
+    $isModal = $display === \IbnNajjaar\MIBGlobalPay\Core\Checkout\CheckoutDisplay::Modal;
+@endphp
+@if ($isModal)
+<button type="button" id="{{ $targetId }}-open">{{ __('Pay now') }}</button>
+<dialog id="{{ $targetId }}-dialog">
+@endif
+<div {{ $attributes->merge(['id' => $targetId]) }}>
+    {{ $slot->isEmpty() ? ($isPayment ? __('Redirecting to the payment page…') : __('Loading the payment form…')) : $slot }}
 </div>
-<script src="{{ $scriptUrl }}" data-error="mibGlobalPayError" data-cancel="mibGlobalPayCancel"></script>
-<script>
-    function mibGlobalPayError(error) { console.error('MIB Checkout error', error); }
-    function mibGlobalPayCancel() {}
-    Checkout.configure({ session: { id: @js($session) } });
-    Checkout.showPaymentPage();
-</script>
+@if ($isModal)
+</dialog>
+@endif
+{!! $checkoutJs($targetId)->scripts() !!}

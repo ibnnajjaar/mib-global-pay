@@ -9,10 +9,10 @@ namespace IbnNajjaar\MIBGlobalPay\Core\Http;
  */
 final class Redactor
 {
-    public const MASK = '[REDACTED]';
+    public const string MASK = '[REDACTED]';
 
     /** Keys whose values are always masked, compared case-insensitively. */
-    private const SENSITIVE_KEYS = [
+    private const array SENSITIVE_KEYS = [
         'password',
         'apipassword',
         'secret',

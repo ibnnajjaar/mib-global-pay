@@ -9,12 +9,49 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    name: PHP ${{ matrix.php-version }} Tests
+    name: PHP ${{ matrix.php-version }} - Laravel ${{ matrix.laravel }} Tests
 
     strategy:
       matrix:
         php-version: ['8.4', '8.5']
+        laravel: ['12.*', '13.*']
+        include:
+          - laravel: '12.*'
+            testbench: '10.*'
+          - laravel: '13.*'
+            testbench: '11.*'
       fail-fast: false
+
+    # Real servers for tests/Laravel/DatabaseNotificationStoreTest.php; without the env vars it uses SQLite only.
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: test
+          MYSQL_DATABASE: test
+        ports:
+          - 53306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptest"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      MIB_TEST_MYSQL_DSN: mysql://root:test@127.0.0.1:53306/test
+      MIB_TEST_PGSQL_DSN: pgsql://postgres:test@127.0.0.1:55432/test
 
     steps:
       - name: Checkout code
@@ -24,7 +61,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
-          extensions: mbstring, xml, ctype, json, curl
+          extensions: mbstring, xml, ctype, json, curl, pdo_mysql, pdo_pgsql, pdo_sqlite
           coverage: xdebug
 
       - name: Validate composer.json
@@ -35,29 +72,35 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor
-          key: ${{ runner.os }}-php-${{ matrix.php-version }}-${{ hashFiles('composer.json') }}
+          key: ${{ runner.os }}-php-${{ matrix.php-version }}-laravel-${{ matrix.laravel }}-${{ hashFiles('composer.json') }}
           restore-keys: |
-            ${{ runner.os }}-php-${{ matrix.php-version }}-
+            ${{ runner.os }}-php-${{ matrix.php-version }}-laravel-${{ matrix.laravel }}-
+
+      - name: Select Laravel and Testbench versions
+        run: composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --dev --no-interaction --no-update
 
       - name: Install dependencies
-        run: composer update --prefer-dist --no-progress
+        run: composer update --prefer-dist --no-progress --no-interaction
 
       - name: Code style (Pint)
         run: vendor/bin/pint --test
+
+      - name: Refactoring check (Rector)
+        run: vendor/bin/rector process --dry-run --no-progress-bar
 
       - name: Static analysis (PHPStan max + Larastan)
         run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
 
       - name: Run test suite
         run: |
-          if [[ "${{ startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '8.4' }}" == "true" ]]; then
+          if [[ "${{ startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '8.4' && matrix.laravel == '13.*' }}" == "true" ]]; then
             vendor/bin/pest --coverage-clover=clover.xml
           else
             vendor/bin/pest
           fi
 
       - name: Make code coverage badge
-        if: startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '8.4'
+        if: startsWith(github.event.head_commit.message, 'coverage') && matrix.php-version == '8.4' && matrix.laravel == '13.*'
         uses: timkrase/phpunit-coverage-badge@v1.2.1
         with:
           coverage_badge_path: .github/coverage.svg

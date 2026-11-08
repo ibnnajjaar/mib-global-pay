@@ -22,17 +22,21 @@ use IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationStatus;
  *  2. It must have no settlement and no attempt recorded as Captured.
  *  3. Every earlier attempt that may still be paid (Created, Live, Expired) is verified with the
  *     gateway, expired or not. In order of precedence:
- *     - any Captured / AmountMismatch / CurrencyMismatch refuses with MoneyCaptured (and the
- *       optional $onMoneyCaptured hook runs, so the Laravel layer can run the capture pipeline);
+ *     - any Captured / PartiallyCaptured / AmountMismatch / CurrencyMismatch refuses with
+ *       MoneyCaptured (and the optional $onMoneyCaptured hook runs, so the Laravel layer can run
+ *       the capture pipeline);
+ *     - any Authorized refuses with AuthorizationHeld (and the hook runs), because a new attempt
+ *       could hold the payer's funds twice;
  *     - any Pending refuses with VerificationPending;
  *     - any NotCaptured / NotFound attempt that has not expired refuses with AttemptStillLive;
  *       a Live one is returned as reusableAttempt;
- *     - otherwise the attempts (expired and NotCaptured/NotFound, or Reversed) are returned in
+ *     - otherwise the attempts (expired and NotCaptured/NotFound, Verified, or Reversed) are returned in
  *       attemptsToSupersede, and a new attempt is allowed.
  *
  * Failed and Superseded attempts need no check. Cost: one Retrieve Order per attempt that may
- * still be paid (usually zero or one). If the gateway cannot be reached the guard throws, so no
- * new attempt starts while an older one might be paid.
+ * still be paid (usually zero or one). If the gateway cannot be reached, or a response is not
+ * recognised as coming from it (a 404 page from a wrong host, say), the guard throws, so no new
+ * attempt starts while an older one might be paid.
  */
 final readonly class AttemptGuard
 {
@@ -79,6 +83,7 @@ final readonly class AttemptGuard
         $now = ($this->clock)();
         $verifications = [];
         $captured = [];
+        $held = [];
         $pending = null;
         $live = null;
         $toSupersede = [];
@@ -93,10 +98,12 @@ final readonly class AttemptGuard
 
             if ($verification->isMoneyCaptured()) {
                 $captured[] = [$attempt, $verification];
+            } elseif ($verification->isAuthorizationHeld()) {
+                $held[] = [$attempt, $verification];
             } elseif ($verification->status === VerificationStatus::Pending) {
                 $pending ??= $attempt;
-            } elseif ($verification->status === VerificationStatus::Reversed || $attempt->expiresAt() <= $now) {
-                // Finished without money held: expired and NotCaptured/NotFound, or reversed.
+            } elseif (in_array($verification->status, [VerificationStatus::Reversed, VerificationStatus::Verified], true) || $attempt->expiresAt() <= $now) {
+                // Finished without money held: expired and NotCaptured/NotFound, verified, or reversed.
                 $toSupersede[] = $attempt;
             } else {
                 $live ??= $attempt;
@@ -111,6 +118,16 @@ final readonly class AttemptGuard
             }
 
             return new GuardResult(false, GuardRefusal::MoneyCaptured, $next, blockingAttempt: $captured[0][0], verifications: $verifications);
+        }
+
+        if ($held !== []) {
+            foreach ($held as [$attempt, $verification]) {
+                if ($this->onMoneyCaptured !== null) {
+                    ($this->onMoneyCaptured)($payable, $attempt, $verification);
+                }
+            }
+
+            return new GuardResult(false, GuardRefusal::AuthorizationHeld, $next, blockingAttempt: $held[0][0], verifications: $verifications);
         }
 
         if ($pending !== null) {

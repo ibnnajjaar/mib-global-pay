@@ -18,6 +18,9 @@ use IbnNajjaar\MIBGlobalPay\Laravel\Testing\MibGlobalPayFake;
  * @method static \DateTimeImmutable attemptExpiresAt(\DateTimeInterface $createdAt)
  * @method static \IbnNajjaar\MIBGlobalPay\Core\Attempts\AttemptGuard attemptGuard()
  * @method static \IbnNajjaar\MIBGlobalPay\Core\Reversal\ReversalHelper reversal()
+ * @method static \IbnNajjaar\MIBGlobalPay\Laravel\Models\CheckoutAttempt startCheckout(\IbnNajjaar\MIBGlobalPay\Core\Attempts\Payable&\Illuminate\Database\Eloquent\Model $payable, \IbnNajjaar\MIBGlobalPay\Core\Requests\InteractionOperation $operation = \IbnNajjaar\MIBGlobalPay\Core\Requests\InteractionOperation::Purchase, ?\Closure $customize = null)
+ * @method static \IbnNajjaar\MIBGlobalPay\Laravel\Models\CheckoutAttempt startPaymentLink(\IbnNajjaar\MIBGlobalPay\Core\Attempts\Payable&\Illuminate\Database\Eloquent\Model $payable, ?\DateTimeInterface $expiresAt = null, ?int $allowedAttempts = null, \IbnNajjaar\MIBGlobalPay\Core\Requests\InteractionOperation $operation = \IbnNajjaar\MIBGlobalPay\Core\Requests\InteractionOperation::Purchase, ?\Closure $customize = null)
+ * @method static void confirmUnpaid(\IbnNajjaar\MIBGlobalPay\Laravel\Models\CheckoutAttempt $attempt, string $confirmedBy, ?string $reason = null)
  * @method static \IbnNajjaar\MIBGlobalPay\Core\Responses\CheckoutSession initiateCheckout(\IbnNajjaar\MIBGlobalPay\Core\Requests\CheckoutRequest $request)
  * @method static \IbnNajjaar\MIBGlobalPay\Core\Verification\VerificationResult verifyCapture(string $orderId, \IbnNajjaar\MIBGlobalPay\Core\Money\Money $expected)
  * @method static \IbnNajjaar\MIBGlobalPay\Core\Responses\OrderResponse retrieveOrder(string $orderId)
@@ -36,7 +39,7 @@ final class MibGlobalPay extends Facade
      */
     public static function fake(): MibGlobalPayFake
     {
-        $app = static::getFacadeApplication();
+        $app = self::getFacadeApplication();
         if ($app === null) {
             throw new \RuntimeException('MibGlobalPay::fake() needs a Laravel application');
         }
@@ -44,7 +47,7 @@ final class MibGlobalPay extends Facade
         $fake = new MibGlobalPayFake($app->make(GatewayConfig::class));
         $app->instance(Gateway::class, $fake);
         $app->forgetInstance(\IbnNajjaar\MIBGlobalPay\Laravel\MibGlobalPay::class);
-        static::clearResolvedInstance(static::getFacadeAccessor());
+        self::clearResolvedInstance(self::getFacadeAccessor());
 
         return $fake;
     }

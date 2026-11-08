@@ -6,6 +6,7 @@ parameters:
     level: max
     paths:
         - src
+        - tests/Support/PayableInvoice.php
     tmpDir: build/phpstan
     ignoreErrors:
         # Used by host test cases, not by the package itself.

@@ -56,3 +56,16 @@ it('does not confuse keys that concatenate to the same string', function () {
     expect($store->claimTransaction('A-1', '2', 'x'))->toBeTrue()
         ->and($store->claimTransaction('A', '1-2', 'x'))->toBeTrue();
 });
+
+it('records deliveries idempotently', function () {
+    $store = new InMemoryNotificationStore();
+
+    expect($store->wasDelivered('ORDER-1', '1', 'payment_captured'))->toBeFalse();
+
+    $store->markDelivered('ORDER-1', '1', 'payment_captured');
+    $store->markDelivered('ORDER-1', '1', 'payment_captured');
+
+    expect($store->wasDelivered('ORDER-1', '1', 'payment_captured'))->toBeTrue()
+        ->and($store->wasDelivered('ORDER-1', '1', 'refund_processed'))->toBeFalse()
+        ->and($store->claimTransaction('ORDER-1', '1', 'payment_captured'))->toBeFalse();
+});

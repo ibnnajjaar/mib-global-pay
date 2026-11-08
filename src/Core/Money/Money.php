@@ -15,10 +15,10 @@ use IbnNajjaar\MIBGlobalPay\Core\Exceptions\UnsupportedCurrency;
  * There is no float constructor. Values may be negative (differences, reversals);
  * request builders and operations enforce positive amounts where the gateway needs them.
  */
-final readonly class Money
+final readonly class Money implements \Stringable
 {
     /** Number of digits in PHP_INT_MAX; longer digit strings cannot be represented. */
-    private const MAX_DIGITS = 19;
+    private const int MAX_DIGITS = 19;
 
     private function __construct(
         public int $minor,

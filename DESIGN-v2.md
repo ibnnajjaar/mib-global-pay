@@ -1,12 +1,14 @@
-# Design: `ibnnajjaar/mib-global-pay` v2.0.0
+# Design: `ibnnajjaar/mib-global-pay` v2
 
-Status: **ready for 2.0.0.** All stages are implemented, through stage 8 (1.x API removed). This document records the design and every decision. Remaining items that depend on MIB, all implemented but with the gateway facts unverified:
-- the exact response for an unknown order, which maps to `NotFound` and drives the AttemptGuard supersede rule and `PaymentFailed` (MIB question 17);
+Status: **beta.** The current tag is `v2.0.0-beta.1`. All stages are implemented, through stage 8 (1.x API removed), but no authenticated sandbox flow has been run against the gateway, and MIB has not answered the questions in §12. This document records the design and every decision.
+
+Gateway behaviour that is still unverified. All of it is implemented, and all of it depends on MIB:
+- the exact response for an unknown order or transaction. The package assumes the format stated in §4.2, maps it to `NotFound`, and that drives the AttemptGuard supersede rule and `PaymentFailed` (MIB question 17);
 - the webhook body format, and the Payment Alerts body shape, classified by body shape until confirmed (question 18);
 - webhook headers: does the attempt counter start at 1, is the ID always present, and which casing is sent (question 19);
 - which characters `order.id` and `order.reference` accept (question 16);
 - the production gateway host: `Environment::Production` has no preset until MIB answers (question 14);
-- whether `APPROVED_AUTO` / `PARTIALLY_APPROVED` occur (questions 5–6), whether Update Session works on HCO sessions (question 3, shipped as experimental), and which operations, currencies and features are enabled (questions 1, 2, 7–13, 15).
+- whether `APPROVED_AUTO` / `PARTIALLY_APPROVED` occur (questions 5–6), whether Update Session works on HCO sessions (question 3, shipped as experimental), how long a session lasts (question 4), and which operations, currencies and features are enabled (questions 1, 2, 7–13, 15).
 
 The full list for MIB is in "Questions for MIB" (§12), and as a sendable letter in `docs/mib-questions.md` (untracked).
 
@@ -21,7 +23,7 @@ Facts about the gateway in this document come from the MIB test-gateway document
 ### Goals
 
 1. A **PHP 8.4+ only** core. It is strict, typed and immutable, with no floats for money.
-2. An **optional Laravel 13 layer** in the same package (`src/Laravel`). It has a service provider, config, a webhook route, a controller and middleware, events, a host contract and a testing fake.
+2. An **optional Laravel 12 and 13 layer** in the same package (`src/Laravel`). It has a service provider, config, a webhook route, a controller and middleware, events, a host contract and a testing fake.
 3. Make the ISIMS class of bug **hard to write**. A gateway capture must never become "paid" without three checks:
    - the secret is verified;
    - the amount and currency are verified against what the host expected;
@@ -32,9 +34,9 @@ Facts about the gateway in this document come from the MIB test-gateway document
 
 ### Non-goals
 
-- The package will **not** own the host's Payment or Invoice models, migrations or business rules. ISIMS keeps those.
+- The package will **not** own the host's Payment or Invoice models or business rules. ISIMS keeps those. It offers optional storage for checkout attempts (`HasMibPayments`, `CheckoutAttempt`), and a host can keep its own by binding a `PayableResolver`.
 - It will not handle direct card capture (PCI scope). Hosted Checkout stays the only payer flow.
-- It will not support Laravel < 13 or PHP < 8.4.
+- It will not support Laravel < 12 or PHP < 8.4.
 
 ---
 
@@ -156,7 +158,7 @@ The v100 Retrieve Order reference (`transaction[n].response.gatewayCode`) lists 
 | `APPROVED_PENDING_SETTLEMENT` | "Transaction Approved - pending batch settlement" | approved |
 | `APPROVED_AUTO` | "automatically approved by the gateway. it was not submitted to the acquirer" | **not** money received by default. Opt in with config `approval.accept_approved_auto` / `MIB_ACCEPT_APPROVED_AUTO=false` (decided, §12 Q15). |
 | `PARTIALLY_APPROVED` | "approved for a lesser amount than requested. The approved amount is returned in order.totalAuthorizedAmount" | not approved. `verifyCapture` reports `AmountMismatch` if money moved. |
-| `PENDING`, `SUBMITTED`, `DEFERRED_TRANSACTION_RECEIVED`, `UNKNOWN`, `TIMED_OUT` | in progress or unknown | `Pending`. Never paid, never failed: ask again later. |
+| `PENDING`, `SUBMITTED`, `DEFERRED_TRANSACTION_RECEIVED`, `UNKNOWN`, `TIMED_OUT` | in progress or unknown | `Pending`. Never paid, never failed: ask again later. After `MIB_REVIEW_AFTER_SECONDS`, `PaymentNeedsReview` asks a person to decide. |
 
 The full v100 enum is: ABORTED, ACQUIRER_SYSTEM_ERROR, APPROVED, APPROVED_AUTO, APPROVED_PENDING_SETTLEMENT, AUTHENTICATION_FAILED, AUTHENTICATION_IN_PROGRESS, BALANCE_AVAILABLE, BALANCE_UNKNOWN, BLOCKED, CANCELLED, DECLINED, DECLINED_AVS, DECLINED_AVS_CSC, DECLINED_CSC, DECLINED_DO_NOT_CONTACT, DECLINED_INVALID_PIN, DECLINED_PAYMENT_PLAN, DECLINED_PIN_REQUIRED, DEFERRED_TRANSACTION_RECEIVED, DUPLICATE_BATCH, EXCEEDED_RETRY_LIMIT, EXPIRED_CARD, INSUFFICIENT_FUNDS, INVALID_CSC, LOCK_FAILURE, NOT_ENROLLED_3D_SECURE, NOT_SUPPORTED, NO_BALANCE, PARTIALLY_APPROVED, PENDING, REFERRED, SUBMITTED, SYSTEM_ERROR, TIMED_OUT, UNKNOWN, UNSPECIFIED_FAILURE.
 
@@ -250,7 +252,7 @@ $result->isCapturedExactly(); // status === Captured
 | `NotCaptured` | No approved money-in transaction (still initiated, declined, authorised only, …) |
 | `Pending` | Latest transaction `Result::PENDING` or `UNKNOWN`. Ask again later. |
 | `Reversed` | Captured and then fully refunded or voided |
-| `NotFound` | Gateway has no such order (HTTP 400/404 with "order not found") |
+| `NotFound` | The gateway says it has no such order, by the rule below. A 400 or 404 not recognised as a gateway error throws instead |
 
 Rules:
 
@@ -266,14 +268,39 @@ Rules:
 4. `AmountMismatch` when `totalCapturedAmount` is missing (decided, ISIMS feedback).
 5. Otherwise `Captured` when `totalCaptured` equals the expected amount, and `AmountMismatch` when it does not. A partial refund does not change the result; `refunded` is exposed on the result.
 
-`NotFound` is returned for HTTP 404, or HTTP 400 whose explanation says the order was not found. This mapping is **unverified against the MIB sandbox**. Any other `GatewayException` is rethrown.
+`NotFound` means unpaid, and it can allow a new attempt, so a false `NotFound` can charge a payer twice. When unsure, the rule says no and the `GatewayException` is rethrown. `CaptureVerifier::isOrderNotFound()` needs all of these:
+
+1. The raw body is in the documented error format (`GatewayException::isGatewayError()`): a JSON object with `result` = `ERROR`, and an `error` object whose `cause` is one of the four documented values, which are case sensitive.
+2. `error.cause` is `INVALID_REQUEST`. The other causes describe a rejected request, a busy server or a system failure.
+3. There is no `error.field` or `error.validationType`. The docs return those for a field that failed validation, which says the request was wrong, not that the order is missing.
+4. Either the status is HTTP 404, with any wording, or it is HTTP 400 and `error.explanation` says the order is what is missing: it starts with "Unable to find order", or with "Order", then an optional ID containing a digit, then "not found" or "does not exist". A leading "The", "with id" and "was" are allowed, and case is ignored. "Merchant not found", "Order reference not found", "Unable to find order.reference" and a value echoed in a validation message do not count.
+
+| Response | Result |
+|---|---|
+| 404 or 400 with HTML, an empty body, or other JSON, including a body with no `result` or an undocumented `cause` | Throws, with a message saying it was not recognised as a gateway error and to check the host |
+| 404 in the format above | `NotFound`, whatever the wording |
+| 404 with another documented cause, or naming a field | Throws |
+| 400 in the format above, saying the order is missing | `NotFound` |
+| 400 in the format above, with any other explanation, or naming any field | Throws |
+
+**This rule is unverified.** No sandbox response exists and MIB has not answered question 17. The assumed format of an unknown order is HTTP 404, or HTTP 400 with one of the wordings above, and a body like `{"result":"ERROR","error":{"cause":"INVALID_REQUEST","explanation":"..."}}`.
+
+What the docs (API v100) do say: the API Error Handling page gives 400 for a malformed request and 401 for failed authentication, and says a client-side error "usually" has `error.cause` `INVALID_REQUEST`. The Transaction Errors page and the Retrieve Order reference define `result` = `ERROR`, the four `error.cause` values, and `error.field` and `error.validationType` for field validation, and the Transaction Errors page says the format of `error.explanation` cannot be guaranteed. What they do not say: they never mention HTTP 404 or an unknown order, so neither status nor wording for this case is documented. The format comes from the docs. Applying it to an unknown order is our assumption.
+
+- **Decided: a gateway-shaped 404 counts without not-found wording.** Requiring wording would depend on text the docs say cannot be guaranteed, and could make every real not-found throw. A wrong host or a proxy is very unlikely to send this exact body. The remaining risk: the real gateway might answer this format with a 404 for something other than the order, such as an unsupported API version in the URL. Such a configuration would also fail Initiate Checkout, so no attempts would exist to misread, unless the configuration changed after they were created.
+- **Decided: a 400 needs the wording.** The docs describe a 400 as a request the gateway could not parse, so without the wording it says nothing about the order.
+- **A false negative costs a stuck payable, not money.** If MIB's real response misses this rule, `verifyCapture()` throws for every order the gateway does not have. A Hosted Checkout order only appears once the payer submits payment, so that is every abandoned attempt. `AttemptGuard` then throws for that payable instead of allowing a new attempt, and the payer cannot try again. `PaymentFailed` never fires for those attempts. Operators see the exception from the guard, `error` rows and a failed exit code from `mib:reconcile` while the attempt is awaiting the gateway, and failed `ProcessNotification` jobs. The first sandbox run shows it, and the fix is a change to this rule once the real response is known.
+
+Retrieve Transaction has no documented unknown-transaction response either. `CaptureVerifier::isTransactionNotFound()` is the same rule with the 400 wording naming the transaction, and a 404 counts whether the transaction or its order is what is unknown. `ReversalHelper` uses it to decide that a void is absent, and still needs the re-read order to agree before any refund. A 400 on the void itself leads to that read only when it is in the gateway format. Both are equally unverified.
+
+`ProcessNotification` treats a 4xx as permanent only when it is a gateway error. **Decided:** a 4xx that is not one is retried over the job's usual window of about 18 minutes, then ends `Failed`, because a wrong host is a configuration the host can correct and a proxy error can clear up, and `mib:reconcile` still covers captures. `MibGlobalPayFake` applies the same rule, so a `GatewayException` a host stubs needs the raw JSON body to count as a gateway error.
 
 Also in stage 4:
 
 - `HostedCheckoutReturn::fromQuery()` and `matchesSuccessIndicator()` (timing-safe, below).
 - `Support\GatewayOrderId`, the default `Contracts\OrderIdGenerator` (sanitising per §6.7 C).
-- `Support\TransactionId::generate()`.
-- `Reversal\ReversalHelper::reverse($orderId, $voidTxnId, $refundTxnId)`. It voids the latest approved payment or capture. When the void is declined or rejected with 4xx, it refunds `refundable()` instead. A 5xx response is rethrown.
+- `Support\TransactionId::generate()`, and `derive($prefix, ...$parts)` for IDs that stay the same across resends (always 40 characters).
+- `Reversal\ReversalHelper::reverse($orderId, $voidTxnId, $refundTxnId)`, and `reverseWithDerivedIds($orderId)`, which uses `ReversalIds::derive()` on the order and the capture it finds. It voids the latest approved payment or capture and refunds `refundable()` against it only if the void definitely failed. On an HTTP 400 in the gateway's error format the void is read back by ID and the order re-read, and the refund needs the void absent (§4.2) or definitely failed and the order unchanged; anything else is `Unconfirmed`, and a failed read is rethrown, including a 404 that is not a gateway error. Other 4xx and 5xx responses are rethrown, and so is a 400 not in that format. A result that may still change (including `UNSPECIFIED_FAILURE`) is `Unconfirmed` with no refund. Each call first reports a void or refund already listed: our IDs, a void of this target, or a refund under another ID only if it targets this capture and covers all of it. Any unsettled void or refund on the order blocks sending. A failed void is not resent, and a failed refund is final (`Refund`, `reversed=false`), because the docs say a failed operation needs a new ID. Based on the docs, not yet observed on the live gateway.
 
 Enum helpers (decided): `OrderStatus::isTerminalWithoutPayment()` (FAILED, CANCELLED, AUTHENTICATION_UNSUCCESSFUL; a convenience only), `TransactionType::movesMoneyIn()` (PAYMENT, CAPTURE; not AUTHORIZATION), `isVoid()` (all four VOID types) and `reversesMoneyIn()` (VOID_PAYMENT, VOID_CAPTURE). There is no broad `isFinal()` and no `isMoneyHeld()`; use the Money totals instead. `AttemptGuard` and the host contracts are in `Core\Attempts` (§6.7).
 
@@ -338,7 +365,7 @@ Facts from the Webhook Notifications guide:
 - Invalid amounts or currencies → `MalformedNotification`.
 - `NotificationVerifier::unverified()` exists for tests and the fake only.
 - HTTPS-only delivery and the 2-second response are enforced by the HTTP layer (stage 6), not by the core.
-- `NotificationStore`: `claim(id, ?orderId)`, `release(id)`, `markProcessed(id, NotificationOutcome)`, `outcomeOf(id)`, and `claimTransaction(orderId, transactionId, outcome)` for the business-level dedupe. `InMemoryNotificationStore` implements it for tests and single-process use.
+- `NotificationStore`: `claim(id, ?orderId)`, `release(id)`, `markProcessed(id, NotificationOutcome)`, `outcomeOf(id)`, `claimTransaction(orderId, transactionId, outcome)` for advisory events, and `wasDelivered()` and `markDelivered()` with the same arguments for money events (§12 Q23). `InMemoryNotificationStore` implements it for tests and single-process use.
 
 **Decided after stage 5:**
 - Notifications are classified by body shape until MIB confirms the formats (Q18).
@@ -360,21 +387,21 @@ Facts from the Webhook Notifications guide:
 
 - Two levels of idempotency:
   1. **Notification level:** dedupe on the notification ID. The gateway retries for up to 3 days.
-  2. **Business level:** dedupe on `(orderId, transactionId)` of the capture. A second notification about the same transaction never produces a second `PaymentCaptured`. This also covers the return URL and the webhook racing each other.
+  2. **Business level:** dedupe on `(orderId, transactionId, outcome)`. Once a dispatch has completed and been recorded, a second notification about the same transaction does not produce the event again. This also covers the return URL and the webhook arriving one after the other. If they overlap, the event can repeat (§12 Q23).
 - The core ships an `InMemoryNotificationStore` for tests. The Laravel layer ships a cache-lock or database store (§6.4).
 
 ---
 
-## 6. Laravel 13 layer (optional)
+## 6. Laravel 12 and 13 layer (optional)
 
-It is auto-discovered through `extra.laravel.providers`. The core works without it, and `illuminate/*` is listed under `suggest` and `require-dev` only (decided, §12 Q2).
+It is auto-discovered through `extra.laravel.providers`. The core works without it, and `illuminate/*` is listed under `suggest` and `require-dev` only (decided, §12 Q2). Composer refuses to install the package into any Laravel other than 12 or 13 (decided, §12 Q22).
 
 ### 6.0 Implemented in stage 6
 
 **Classes:**
 - `Laravel\MibGlobalPayServiceProvider`, auto-discovered via `extra.laravel.providers`, together with the `MibGlobalPay` facade alias.
 - `config/mib-global-pay.php`, with the keys and defaults of §6.7 F. Publish it with `--tag=mib-global-pay-config`.
-- The facade `Laravel\Facades\MibGlobalPay`, backed by `Laravel\MibGlobalPay`. Its helpers are `attemptOrderId()`, `randomOrderId()`, `newCheckoutRequest()` (which applies the checkout timeout, and the webhook URL as `order.notificationUrl` when the route exists), `webhookUrl()`, `attemptExpiresAt()`, `attemptGuard()` and `reversal()`. Every other method is forwarded to the `Gateway`.
+- The facade `Laravel\Facades\MibGlobalPay`, backed by `Laravel\MibGlobalPay`. Its helpers are `attemptOrderId()`, `randomOrderId()`, `newCheckoutRequest()` (which applies the checkout timeout, and the webhook URL as `order.notificationUrl` when the route exists, with or without `route:cache`; see §6.2), `webhookUrl()`, `attemptExpiresAt()`, `attemptGuard()` and `reversal()`. Every other method is forwarded to the `Gateway`.
 
 **Webhook endpoint:**
 - `Route::mibGlobalPayWebhook($uri)` registers a POST route named `mib-global-pay.webhook` with the CSRF middleware excluded. It is auto-registered on `webhook.domain`/`webhook.path` unless `webhook.register_route` is false.
@@ -395,27 +422,27 @@ It is auto-discovered through `extra.laravel.providers`. The core works without 
 
 **Outcome pipeline:**
 - `Outcome\OutcomeProcessor` is used by the job, by `PaymentOutcome::resolveFromReturn()` and `check()`, and by `mib:reconcile`.
-- It calls `verifyCapture()` against `Payable::expectedAmount()`. Then, inside `Payable::lock()`, it re-reads the payable and dispatches at most one §6.7 E event, with business dedupe through `NotificationStore::claimTransaction()`.
+- It calls `verifyCapture()` against `Payable::expectedAmount()`. Then, inside `Payable::lock()`, it re-reads the payable and dispatches at most one §6.7 E event. Money events check `NotificationStore::wasDelivered()` first and call `markDelivered()` once the lock has returned; advisory events use `claimTransaction()` per notification (§12 Q23).
 - The package never changes the payable.
 
 **Stores:**
 - `Stores\DatabaseNotificationStore` (the default) uses the publishable migration (`--tag=mib-global-pay-migrations`). Table `mib_global_pay_notifications` has `notification_id` unique, plus `(order_id, transaction_id, outcome)` unique.
-- `Stores\CacheNotificationStore` uses atomic `add()` with a 5-day TTL.
+- `Stores\CacheNotificationStore` uses atomic `add()` with a 5-day TTL. Money-event delivery records have no TTL and wait for an open host transaction to commit (§12 Q23).
 
 **Commands:**
 - `mib:reconcile` processes every `awaitingGateway()` attempt, and exits non-zero if any attempt errored.
-- `mib:prune-notifications --days=30` (minimum 4).
+- `mib:prune-notifications --days=30` (minimum 4). It keeps money-event delivery records (§12 Q23).
 
 **Double capture and checkout page:**
-- `Listeners\AutoReverseDoubleCapture` is always registered but does nothing unless `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=true`. When enabled, it queues `Jobs\ReverseCapture` after commit. That job voids, then refunds, with transaction IDs fixed at creation so a retry resends identical requests.
+- `Listeners\AutoReverseDoubleCapture` is always registered but does nothing when `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=false`; it is on by default. When enabled, it queues `Jobs\ReverseCapture` after commit. That job voids, then refunds, with transaction IDs derived from the order and capture, so a retry or a second job resends identical requests. It sets its own retries (6 attempts, about 45 minutes) for `Unconfirmed` and exceptions, then logs an error and dispatches `ReversalUnconfirmed`. A definitely failed refund dispatches `ReversalFailed` without retrying.
 - Blade `<x-mib-global-pay::checkout :session="$id" />` renders the Checkout.js page.
 
 **Pipeline choices (decided after stage 6):**
 1. `PaymentFailed` fires for `NotCaptured` or `NotFound` only when the attempt is finished: either the triggering webhook transaction failed, or the attempt is past `expiresAt()`. Otherwise no event is fired.
 2. The return URL always verifies with the gateway, even when `resultIndicator` doesn't match. The match result is only returned to the host, as `indicatorMatched`.
-3. Refund and void notifications dispatch `RefundProcessed` / `VoidProcessed` once, then re-verify the order, which can produce `PaymentReversed`. AUTHORIZATION, VERIFY and other non-money-in transaction notifications are `Ignored`.
+3. Refund and void notifications dispatch `RefundProcessed` / `VoidProcessed` (at least once, §12 Q23), then re-verify the order, which can produce `PaymentReversed`. AUTHORIZATION, VERIFY and other non-money-in transaction notifications are `Ignored`.
 4. A capture on a payable that is `Paid` without a recorded settlement fires `CaptureMismatch(DoubleCapture)` with `existingSettlement = null`, never `PaymentCaptured`.
-5. `PaymentPending` and `PaymentFailed` are not deduped, so reconciliation may repeat them. `PaymentCaptured`, `CaptureMismatch`, `PaymentCapturedForUnpayableOrder` and `PaymentReversed` fire once per order + transaction.
+5. `PaymentPending` and `PaymentFailed` go out at most once per notification, and reconciliation, which has no notification, may repeat them. `PaymentCaptured`, `CaptureMismatch`, `PaymentCapturedForUnpayableOrder` and `PaymentReversed` go out at least once until one dispatch completes, then not again, per order + transaction + outcome (§12 Q23).
 
 ### 6.1 Config (`config/mib-global-pay.php`) and env keys
 
@@ -440,7 +467,7 @@ It is auto-discovered through `extra.laravel.providers`. The core works without 
 | `currencies` | `MIB_CURRENCIES` (default `MVR`) | Allow-list over the ISO `Currency` enum (Q5) |
 | `order_prefix` | `MIB_ORDER_PREFIX` | Prefix for attempt order IDs (§6.5) |
 | `approval.accept_approved_auto` | `MIB_ACCEPT_APPROVED_AUTO` (default `false`) | Q15 |
-| `double_capture.auto_reverse` | `MIB_AUTO_REVERSE_DOUBLE_CAPTURE` (default `false`) | Enables the `AutoReverseDoubleCapture` listener (Q19) |
+| `double_capture.auto_reverse` | `MIB_AUTO_REVERSE_DOUBLE_CAPTURE` (default `true`) | Enables the `AutoReverseDoubleCapture` listener (Q19) |
 | `allow_insecure_urls` | `MIB_ALLOW_INSECURE_URLS` (default `false`) | Local development only (Q7) |
 
 The provider binds `MibGateway` as a singleton and the `MibGlobalPay` facade. It also offers a `<x-mib-global-pay::checkout :session="$id" />` Blade component that renders the Checkout.js redirect page.
@@ -455,7 +482,11 @@ The provider binds `MibGateway` as a singleton and the `MibGlobalPay` facade. It
   });
   ```
   **Decided:** the macro `Route::mibGlobalPayWebhook($uri)` returns the `Illuminate\Routing\Route`, so hosts can chain `->name()` or `->middleware()`.
-  **Stage 7.1:** the macro also remembers the `Route` instance. `webhookUrl()`, `newCheckoutRequest()` and `postMibNotification()` therefore find it even when a host group prefixes its name (for example `->name('student.')`, giving `student.mib-global-pay.webhook`) or sets a domain. Lookup by name is only a fallback.
+  **Stage 7.1:** the macro also numbers the route in its action array (`Support\WebhookRoute::mark()`). `webhookUrl()`, `newCheckoutRequest()` and `postMibNotification()` therefore find it even when a host group prefixes its name (for example `->name('student.')`, giving `student.mib-global-pay.webhook`) or sets a domain, and also after `route:cache`, when the macro does not run but the action array is still there. Lookup by name is only a fallback, for a route the host wrote by hand with the package's name.
+  **Decided, and the same with or without `route:cache`:**
+  - **Several routes.** The route with the highest number wins, which is the last one registered, including the auto-registered route. The number is needed because Laravel 13 lists routes with a domain first, so route order alone would not give the last one. `route:cache` itself refuses two routes with the same name, so an auto-registered route next to a macro route with no name prefix makes it fail.
+  - **`webhook.enabled = false`.** Nothing is auto-registered, so `webhookUrl()` is null. A macro route is still registered, so its URL is still returned, and it answers 404 (§6.0).
+  - **No route.** `webhookUrl()` is null, and `newCheckoutRequest()` sets no notification URL. `toBody()` then refuses the request unless the host calls `withNotificationUrl()` or `withoutWebhook()`.
 - `VerifyNotificationSecret` middleware returns 401 if the secret check fails, and 400 for a malformed notification.
 - `WebhookController`:
   1. claims the notification ID; a duplicate gets a 200 response and nothing else happens;
@@ -467,9 +498,9 @@ The provider binds `MibGateway` as a singleton and the `MibGlobalPay` facade. It
   3. calls `PayableResolver::resolveAttempt($orderId)`, which works for any attempt of the payable (§6.5);
   4. calls `verifyCapture($orderId, $payable->expectedAmount())`, which re-reads the order from the gateway;
   5. **takes the host's lock** (`$payable->lock()`; see §6.5) and re-checks payability inside the lock;
-  6. dispatches exactly one outcome event (§6.3);
+  6. dispatches at most one outcome event per run (§6.3), and records a money event's delivery after the lock returns (§12 Q23);
   7. marks the notification as processed.
-- `PaymentOutcome::resolveFromReturn($orderId, $resultIndicator)` runs the same pipeline for the return URL. ISIMS calls one service from both paths, and the business-level dedupe in §5.2 makes the race harmless.
+- `PaymentOutcome::resolveFromReturn($orderId, $resultIndicator)` runs the same pipeline for the return URL. ISIMS calls one service from both paths. The business-level dedupe in §5.2 stops repeats, and a listener idempotent on `deliveryKey` covers the overlap (§12 Q23).
 - `php artisan mib:reconcile {--since=}` runs the pipeline for payables the host reports as "awaiting gateway" (`PayableResolver::awaitingGateway()`). It can be scheduled, and it covers lost webhooks and the frozen-session policy.
 
 ### 6.3 Events
@@ -487,6 +518,8 @@ All events are `final readonly` classes. Their exact payload properties are list
 | `PaymentReversed` | `Reversed` (refund or void notifications, or verification after a reversal) |
 | `UnknownOrderNotification` | `PayableResolver` returned null (no such local payment) |
 | `RefundProcessed` / `VoidProcessed` | Lifecycle notifications for those operations |
+| `ReversalUnconfirmed` | `ReverseCapture` ran out of retries without knowing whether the money went back |
+| `ReversalFailed` | The refund sent by `ReverseCapture` definitely failed |
 
 The package **never** marks anything paid. It only fires events. The host's listeners own all model changes.
 
@@ -496,8 +529,8 @@ The package **never** marks anything paid. It only fires events. The host's list
   - Columns: `notification_id` (unique), `order_id`, `transaction_id`, `attempt`, `outcome`, `processed_at` and a raw payload, which is optional and can be pruned.
   - A unique index on `(order_id, transaction_id, outcome)` gives the business-level dedupe.
   - This is the package's only table. It stores no host data.
-- Alternative: a `cache` store using `Cache::lock` / `Cache::add`, for hosts that don't want the table. Its dedupe window is limited by the TTL, which must be set to 4 days or more.
-- Pruning: a `MassPrunable` model, or `mib:prune-notifications --days=30`.
+- Alternative: a `cache` store using `Cache::lock` / `Cache::add`, for hosts that don't want the table. Its dedupe window for notifications and advisory events is limited by the TTL, which must be set to 4 days or more. Money-event delivery records have no TTL (§12 Q23).
+- Pruning: a `MassPrunable` model, or `mib:prune-notifications --days=30`, which keeps money-event delivery records (§12 Q23).
 
 ### 6.5 Host contract
 
@@ -586,9 +619,9 @@ interface Attempt
 
 - **Double-capture refund flow.**
   1. The package never refunds automatically.
-  2. A listener, or finance through admin, calls `$gateway->refund($secondOrderId, TransactionId::generate('refund'), $captured)`. A void is tried first, while `void` is still possible, through `ReversalHelper::reverse($orderId)`. It tries VOID and falls back to REFUND, and returns which one it used.
+  2. A listener, or finance through admin, calls `$gateway->refund($secondOrderId, TransactionId::generate('refund'), $captured)`. A void is tried first, while `void` is still possible, through `ReversalHelper::reverseWithDerivedIds($orderId)`. It tries VOID and falls back to REFUND, and returns which one it used, or `Unconfirmed` if the result is not known yet.
   3. `RefundProcessed` or `VoidProcessed` follows.
-  - **Decided (Q19):** `CaptureMismatch(reason: DoubleCapture)` always fires. The package also ships an optional `AutoReverseDoubleCapture` listener (void, falling back to refund) that is **off by default** (`MIB_AUTO_REVERSE_DOUBLE_CAPTURE=false`). With it off, the host or finance reverses manually.
+  - **Decided (Q19):** `CaptureMismatch(reason: DoubleCapture)` always fires. The package also ships an `AutoReverseDoubleCapture` listener (void, falling back to refund). **Changed (2026-11-02): it is on by default**, because retries after an unresolved payment make a late second capture a known risk. With `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=false`, the host or finance reverses manually.
 - `CaptureMismatch` and `PaymentCapturedForUnpayableOrder` always carry the `VerificationResult`, so the host can show exact amounts.
 - The binding and the full interface signatures are in §6.7. The resolver is bound by the host in a service provider, `$this->app->bind(PayableResolver::class, IsimsPayableResolver::class)`. If it is unbound, the webhook route stays disabled and an exception is thrown with a clear message.
 
@@ -648,7 +681,7 @@ This section is self-contained, so it can be handed to the ISIMS side as it stan
 - Status: **FINAL** as of stage 6 (pushed at `d4fbd10`), with the stage 7.1 fixes (`0749ef4`). Everything in A–F is implemented in the package and decided. What is not final:
   - **ISIMS design choice:** how ISIMS stores the frozen invoice set (A). The package only requires that the set stays immutable while the payable is frozen.
   - **Waiting on MIB** (behaviour implemented, but the gateway facts are unverified):
-    - the exact response for an unknown order, which maps to `NotFound` and feeds both the AttemptGuard supersede rule and `PaymentFailed` (MIB question 17);
+    - the exact response for an unknown order. The assumed format is in §4.2. It maps to `NotFound` and feeds both the AttemptGuard supersede rule and `PaymentFailed` (MIB question 17);
     - the webhook body format and the Payment Alerts shape (question 18);
     - webhook header details (question 19);
     - which characters `order.id` and `order.reference` accept (question 16);
@@ -824,7 +857,7 @@ Binding, in an ISIMS service provider: `$this->app->bind(PayableResolver::class,
      2. **`Pending`** on any attempt refuses with `VerificationPending`.
      3. An attempt that is **not expired** and verifies as `NotCaptured` or `NotFound` refuses with `AttemptStillLive`. Only a `Live` attempt is returned as `reusableAttempt`, never a `Created` one, whose session may not exist.
      4. Otherwise the new attempt is allowed. `attemptsToSupersede` lists the attempts that are expired and `NotCaptured` or `NotFound`, plus any `Reversed` attempt, expired or not.
-     - **Decided:** `NotFound` counts as unpaid. A Hosted Checkout order only appears at the gateway once the payer submits payment, so an unpaid, expired session reads as not found. *Caveat:* this depends on the unverified NotFound mapping (MIB question 17).
+     - **Decided:** `NotFound` counts as unpaid. A Hosted Checkout order only appears at the gateway once the payer submits payment, so an unpaid, expired session reads as not found. *Caveat:* this depends on the unverified NotFound rule (§4.2, MIB question 17). A response the rule does not recognise makes the guard throw, so no new attempt starts.
      - `Failed` and `Superseded` attempts need no check.
      - **Cost:** one Retrieve Order per attempt that may still be paid, usually zero or one. **Decided:** if the gateway can't be reached, the guard throws, so no new attempt starts during an outage while an older one might be paid.
   - When it allows, the host marks every attempt in `GuardResult::$attemptsToSupersede` as `Superseded`. All of them can legally make that transition, including `Created`. The host then creates attempt `nextAttemptNumber` in state `Created`.
@@ -858,6 +891,8 @@ Shared types used in the payloads:
 | `PaymentReversed` | the same as `PaymentPending`, plus `Money $reversedAmount` |
 | `UnknownOrderNotification` | `string $gatewayOrderId, Notification $notification` |
 | `RefundProcessed` / `VoidProcessed` | `string $gatewayOrderId, ?ResolvedAttempt $resolved, TransactionResponse $transaction, Source $source, ?Notification $notification` |
+| `ReversalUnconfirmed` | `string $gatewayOrderId, ?ReversalIds $ids, ?TransactionResponse $transaction, ?string $error`. `ReverseCapture` ran out of retries; a person must act |
+| `ReversalFailed` | `string $gatewayOrderId, ?ReversalIds $ids, ?TransactionResponse $refund`. The refund definitely failed; a person must act |
 
 #### E. Outcome table (evaluated inside `Payable::lock()`, after `verifyCapture()` against `expectedAmount()`)
 
@@ -867,7 +902,7 @@ Shared types used in the payloads:
 |---|---|---|---|
 | `Captured` | `Open` / `Frozen` | none | `PaymentCaptured`. ISIMS marks the payable paid and sets `settled_attempt_id` / `settled_transaction_id`. |
 | `Captured` | `Paid` | same order + transaction | nothing (idempotent) |
-| `Captured` | `Paid` | different attempt or transaction | `CaptureMismatch(DoubleCapture)`. If `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=true`, the `AutoReverseDoubleCapture` listener voids that capture, or refunds it if the void fails. |
+| `Captured` | `Paid` | different attempt or transaction | `CaptureMismatch(DoubleCapture)`. Unless `MIB_AUTO_REVERSE_DOUBLE_CAPTURE=false`, the `AutoReverseDoubleCapture` listener voids that capture, or refunds it if the void fails. |
 | `Captured` | `Cancelled` / `Failed` | — | `PaymentCapturedForUnpayableOrder`. ISIMS re-links the original invoices only if they are all still unpaid; otherwise it flags the payable `captured_after_cancel`. |
 | `AmountMismatch` / `CurrencyMismatch` | any | — | `CaptureMismatch(AmountMismatch / CurrencyMismatch)`, never auto-paid |
 | `Pending` | any | — | `PaymentPending`; the payable stays frozen |
@@ -897,7 +932,7 @@ Shared types used in the payloads:
 | `webhook.queue` / `webhook.connection` | `MIB_WEBHOOK_QUEUE` / `MIB_WEBHOOK_CONNECTION` | app default (decided) |
 | `notification_store` | `MIB_NOTIFICATION_STORE` | `database` |
 | `approval.accept_approved_auto` | `MIB_ACCEPT_APPROVED_AUTO` | `false` |
-| `double_capture.auto_reverse` | `MIB_AUTO_REVERSE_DOUBLE_CAPTURE` | `false` |
+| `double_capture.auto_reverse` | `MIB_AUTO_REVERSE_DOUBLE_CAPTURE` | `true` |
 | `attempts.expiry_grace_seconds` | `MIB_ATTEMPT_GRACE_SECONDS` | `300` (decided) |
 | `checkout.timeout_seconds` | `MIB_CHECKOUT_TIMEOUT` (600–1800, sent as `interaction.timeout`) | `1800` (decided) |
 | `allow_insecure_urls` | `MIB_ALLOW_INSECURE_URLS` | `false` |
@@ -1031,7 +1066,7 @@ All rows are decided except Q4 and Q16, which wait on MIB.
 14. What is the production gateway host name?
 15. Which API versions are supported, and is v100 recommended for production?
 16. Which characters are actually accepted in `order.id` and `order.reference`? The reference says "any characters", 1–40. Are `/`, `(`, `)`, spaces and non-ASCII safe in both, including in the acquirer messages?
-17. **(new)** What exact HTTP status and error body does Retrieve Order return for an unknown order? The package currently maps HTTP 404, or HTTP 400 whose text says "not found", to `NotFound` (unverified).
+17. **(new)** What exact HTTP status and error body does Retrieve Order return for an unknown order? The package maps only a response in the documented error format to `NotFound`: HTTP 404 with any wording, or HTTP 400 saying the order is missing (unverified, §4.2). Please also confirm the same for an unknown transaction on Retrieve Transaction, and what a 404 looks like for anything other than an order.
 18. **(new)** Webhook body format:
     - Is our profile configured for REST-JSON notifications (the package rejects NVP)?
     - Is the transaction-notification body exactly the operation's transaction response, including `order.totalCapturedAmount` and `order.currency`?
@@ -1064,13 +1099,61 @@ All rows are decided except Q4 and Q16, which wait on MIB.
 | Q18 | Webhook types that are not order transactions (Payment Alerts, Authentication) | **Decided:** verify and dedupe every type, with a generic `NotificationReceived` in 2.0; Payment Alerts in 2.x | — |
 | Q19 | Double-capture remediation (a second attempt captured after the payable was settled) | **Decided:** always fire `CaptureMismatch(DoubleCapture)`; optional `AutoReverseDoubleCapture` listener (void, then refund), off by default | — |
 | Q20 | 1.x maintenance after the 1.2 work was folded into v2 | **Decided:** no 1.x branch; cut one from v1.1.0 on demand | — |
-| Q21 | CHANGELOG lists `[1.2.0] - 2026-10-16` as released, and that text is now on the pushed `main` | **Decided:** fixed in the v2 skeleton commit (`[Unreleased]`, compare `v1.1.0...HEAD`; it becomes `[2.0.0]` at release) | — |
+| Q21 | CHANGELOG lists `[1.2.0] - 2026-10-16` as released, and that text is now on the pushed `main` | **Decided:** fixed in the v2 skeleton commit (`[Unreleased]`, compare `v1.1.0...HEAD`; it is now `[2.0.0-beta.1]`, for the planned first beta) | — |
+| Q22 | What does a Laravel app on an unsupported version get on install? | **Decided:** Composer refuses it, through `conflict: {"laravel/framework": "<12.0 \|\| >=14.0"}`, so Laravel 12 and 13 install. It first allowed 13 only, and was widened on 2026-11-02. Reasoning below. | — |
+| Q23 | What may a listener rely on about how often an event goes out? | **Decided:** money events at least once until one dispatch completes, then not again; advisory events at most once per notification. Reasoning below. | — |
+
+**Q22 in detail (2026-11-01).** Fresh apps on PHP 8.4.27, with the package installed before the conflict existed:
+
+| Laravel | Install | `artisan about` | Package test suite |
+|---|---|---|---|
+| 12.70.2 | Succeeds | Boots; webhook route and `mib:*` commands registered | 580 passed, 32 skipped (Testbench 10), though 12 was not a supported target then |
+| 11.57.1 | Succeeds | Boots; webhook route and `mib:*` commands registered | 49 failed: `ProcessNotification` used `FailOnException`, which does not exist before 12.19, and webhook deliveries on the sync queue get a 503 |
+| 10.50.4 | `composer require` exits non-zero in its scripts and leaves the package installed | Every artisan command dies: `publishesMigrations()` is undefined | Not run |
+
+Laravel 11 is the case that decides this: an app that boots normally there looks fine while its webhooks do not work. Whether a host boots says little about whether payments are processed, so the refusal has to come before the code runs.
+
+- **Chosen:** the conflict fails at install, in development, adds no runtime code, and leaves the app untouched (Composer reverts `composer.json`).
+- **Lower bound:** see the widening below. Laravel 11 stays refused: the job no longer needs `FailOnException`, but 11 is untested since then, and a Composer advisory covers all of 11 with no fixed release.
+- **Upper bound:** Laravel 14 is refused too, since the layer is untested there. Supporting it is a deliberate release.
+- **On `laravel/framework`, not `illuminate/support`:** `laravel/framework` replaces the `illuminate/*` packages, so a full Laravel app is caught either way. A conflict on `illuminate/support` would also refuse non-Laravel hosts that use old `illuminate/*` packages on their own (confirmed: it fails with `illuminate/support` 12). Those hosts never discover the provider, so they carry none of the risk.
+- **Cost:** a Laravel app on another version cannot use the core either, and Composer has no per-package override for a dependency's `conflict`. Such an app upgrades, stays on 1.1, or calls the gateway from a separate non-Laravel project. Any package requiring `laravel/framework` outside ^12 \|\| ^13 cannot share a dependency tree with this one, which is the same rule.
+- **Not covered:** distributions built from `illuminate/*` without `laravel/framework` (Lumen, Laravel Zero) pass the conflict. They have not been tested.
+- **Rejected:** a provider that disables itself outside the supported versions. It would keep the core usable on older Laravel apps, but the host's webhook route would be missing (gateway deliveries get a 404), its listeners would never fire, and the first sign could be a paid order that was never marked paid. Making that visible needs a boot-time warning, plus throwing stand-ins for the facade and the route macro, all kept in sync with the layer, and it still fails at runtime rather than at install.
+- **Reversible:** relaxing the conflict in a later release breaks nobody, while adding one after 2.0.0 would break hosts already installed. If core-only use on older Laravel apps is needed later, it can be added then.
+
+**Widened to Laravel 12 (2026-11-02).** The conflict first allowed Laravel 13 only. It now allows 12 too, because the suite passes on 12, the owner's `merchant` app is on Laravel 12, and Laravel 12's security support ends on 2027-02-24, so a later major version can drop it. The refusal still happens at install, and the package is not split.
+
+| Laravel | Testbench | PHP | Result |
+|---|---|---|---|
+| 12.70.2 | 10.12.0 | 8.4.27, 8.5.11 | 727 passed, 50 skipped; Pint, Rector and PHPStan clean |
+| 13.39.0 | 11.3.0 | 8.4.27, 8.5.11 | The same |
+| 13.0.0 | 11.0.0 | 8.4.27 | The same |
+| 12.18.0, before the change below | 10.5.0 | 8.4.27 | 94 failed, including webhook deliveries getting a 503; PHPStan fails |
+| 12.18.0 and 12.8.0, after it | 10.5.0 | 8.4.27 | 491 passed, 285 risky, 1 failed, with all 3191 assertions of the full run. The failure is in a different test each run: Testbench's cleanup calls `PHPUnit\Runner\ErrorHandler::enable()` with too few arguments. 12.19.0, which has `FailOnException`, gave the same before the change. PHPStan clean |
+| 12.0.0 | None | 8.4.27 | A real app: boots, webhook answers 200 and is processed, a malformed job fails on its first attempt, and the checkout component renders |
+
+- **`FailOnException`:** it arrived in Laravel 12.19.0, so a conflict at `<12.0` alone would have repeated the Laravel 11 failure on 12.0 to 12.18: the app boots and its webhooks fail. `ProcessNotification` now writes the same middleware out itself, which behaves the same on every version.
+- **What the older 12 runs needed:** `phpunit/phpunit` 12.3, `symfony/console` 7.3 (7.2 for the 12.0.0 app) and Composer's advisory block turned off, all in scratch copies. On the newest `symfony/console`, Artisan does not work on Laravel 12.19.0. Composer could not resolve Pest 4 with Testbench on 12.1.1 or 12.3.0, so 12.0.0 has the app check and not the suite. CI runs the newest 12 and the newest 13 only, so it will not catch a new dependency on a later 12 release.
+- **Guzzle:** Laravel 12 requires Guzzle `^7.8.2`, and a fresh app has 7.x, so `--with-all-dependencies` changes nothing there. Laravel 13 allows `^7.8.2 || ^8.0` and a fresh app has 8.x, so it is needed.
+
+**Q23 in detail (2026-11-02).** Claiming before dispatching lost events: after a listener failure, a retry and `mib:reconcile` both saw a duplicate, so a payment could stay unpaid for good. Losing `PaymentCaptured` is worse than repeating it. MIB's docs say webhooks retry "up to 20 times within a 3-day period" and promise no ordering, and Stripe and Adyen warn that duplicates happen, so idempotent consumers are normal for hosts anyway.
+
+- **Money events:** `PaymentCaptured`, `PaymentCapturedForUnpayableOrder`, `CaptureMismatch`, `PaymentReversed`, `RefundProcessed`, `VoidProcessed`. Check `wasDelivered()`, dispatch, and call `markDelivered()` only once `Payable::lock()` has returned. After any throwable, record nothing.
+- **Advisory events:** `NotificationReceived`, `UnknownOrderNotification`, `PaymentPending`, `PaymentFailed`. Claimed per notification before dispatching, and the claim is restored if a transactional lock rolled it back.
+- **`deliveryKey`:** SHA-256 of order ID, transaction ID and outcome, on every money event. With no transaction ID, a mismatch or reversal uses a hash of the status and the totals, because that is the same from every trigger, including ones with no notification, and a new total is a new event. A refund or void uses its notification ID, because two partial refunds can look identical; a redelivery under a new ID would repeat it.
+- **The window after the lock:** a second worker can enter the lock before the first records. `PaymentCaptured` is normally stopped there by the payable's settlement. `PaymentCapturedForUnpayableOrder`, `CaptureMismatch` and `PaymentReversed` repeat. `RefundProcessed` and `VoidProcessed` have no lock, so they repeat if two workers overlap at any point in the dispatch. `markDelivered()` is idempotent, so both workers can record.
+- **Nested locks:** `AttemptGuard` runs inside a lock the host holds, so "the lock has returned" can still be inside the host's transaction. The database store joins that transaction, so a rollback removes the record along with the host's work, and the event goes out again. The cache store cannot roll back, so it waits for the commit (`DatabaseTransactionsManager::addCallback`) and drops the record on rollback. The database store does the same if the host's transaction is on another connection. Transactions opened outside Laravel's database layer are not seen.
+- **Retention:** delivery records have no TTL in the cache, and `mib:prune-notifications` keeps them. Reconcile, `AttemptGuard` and the return URL have no time limit, so an attempt the host keeps reporting would otherwise get its `CaptureMismatch`, and a new `ReverseCapture`, each time a record expired. That costs about one small row or key per money event. A cache flush or eviction still loses records.
+- **`mib:reconcile`:** reaches only what `awaitingGateway()` returns. It never produces `RefundProcessed` or `VoidProcessed`, and it cannot reach an attempt the host has moved on. Those recover through the failed job and `queue:retry`.
+- **Lock with no rollback:** the settlement stops `PaymentCaptured` from repeating, but here a settlement saved by one listener outlives a later listener that threw. So when a dispatch throws, the pipeline records `payment_captured_interrupted` (never a delivery record), and while that exists the settlement no longer stops `PaymentCaptured`. Without it, the notification would end as `Processed` with the event undelivered. What remains: if the process dies mid-dispatch, nothing marks it, the settlement stops the event, and later listeners are not called.
+- **Rejected for now:** an outbox. It needs idempotent consumers too.
 
 ---
 
 ## 13. Tooling
 
-- **Tests:** Pest 4 on PHPUnit 12. Orchestra Testbench 11 (for Laravel 13) runs `tests/Laravel`, and `tests/Core` never boots Laravel.
+- **Tests:** Pest 4 on PHPUnit 12. Orchestra Testbench 10 (for Laravel 12) or 11 (for Laravel 13) runs `tests/Laravel`, and `tests/Core` never boots Laravel.
   - Gateway payload fixtures live in `tests/Fixtures`, taken from the (unreleased) 1.2 fixtures and sandbox captures.
   - Architecture tests (`arch()`):
     - `Core` must not use `Illuminate`;
@@ -1079,8 +1162,9 @@ All rows are decided except Q4 and Q16, which wait on MIB.
     - no `float` in public signatures under `Core\Money` or `Core\Responses`.
 - **Static analysis:** PHPStan 2 at level max, plus Larastan for the Laravel layer.
 - **Style:** Laravel Pint (decided, §12 Q9). It replaces php-cs-fixer when the tooling is swapped.
-- **CI matrix:** PHP 8.4 and 8.5 × Laravel 13 (`prefer-stable` and `prefer-lowest`). A separate core-only job runs without `illuminate/*` installed. Jobs: Pest with coverage, PHPStan and style.
-- Remove from the 1.x-era tooling: the PHP 7.2–8.3 jobs, the Guzzle 6 lowest-dependency job, the `phpunit.xml` `<whitelist>` schema, and the Docker image pinned to old PHP (update it to 8.4).
+- **Refactoring:** Rector as development tooling, checked in CI (`rector.php` records which rules are off and why). This is separate from Q8, which decided against shipping an upgrade set for consumers.
+- **CI matrix:** PHP 8.4 and 8.5 × Laravel 12 with Testbench 10, and Laravel 13 with Testbench 11 (`prefer-stable` and `prefer-lowest`). A separate core-only job runs without `illuminate/*` installed. Jobs: Pest with coverage, PHPStan and style.
+- Remove from the 1.x-era tooling: the PHP 7.2–8.3 jobs, the Guzzle 6 lowest-dependency job, the `phpunit.xml` `<whitelist>` schema, and the Docker setup (removed entirely).
 - `composer.json`:
   - `"php": "^8.4"`, `"guzzlehttp/guzzle": "^7.9"` (or `psr/http-client` plus a discovery package);
   - `extra.laravel.providers`;
@@ -1102,9 +1186,13 @@ The "Phase" column follows the decision in §14.0.
 
 ### 14.0 Phasing (decided)
 
-**2.0.0** covers:
+**Unresolved payments (2026-11-02):** `TIMED_OUT` and pending stay unresolved, so no timer clears them for a new charge. This follows Stripe's and Gr4vy's guidance. After `MIB_REVIEW_AFTER_SECONDS`, `PaymentNeedsReview` asks a person to decide, and `confirmUnpaid()` records that decision after re-reading the gateway. Retired attempts stay in `mib:reconcile` for `MIB_LATE_CAPTURE_WATCH_SECONDS`, and a late second capture is reversed by default. If MIB confirms `TIMED_OUT` is final (question 30), treat it as failed and allow an immediate retry.
 
-- the Hosted Checkout lifecycle: Initiate Checkout (WEBSITE) with all interaction options, the Checkout.js helper and component, Retrieve Order, Retrieve Transaction, Capture, Refund, Void and Update Authorization;
+**Changed (2026-11-02):** every Hosted Checkout feature now ships in 2.0.0, with a ready-made integration so hosts write no Checkout.js or attempt bookkeeping. This replaces the 2.x phase for Payment Links, payment plans, Credential on File, tokens, agreements, server-side Pay, Authorize, Verify and Referral, and the request data in §14.4. The Phase columns below show the original plan. Integrations outside Hosted Checkout (Hosted Session, the Browser Payment, Wallet, Authentication and Risk APIs, Reporting, Batch, mutual TLS) stay in 2.x.
+
+**2.0.0** originally covered:
+
+- the Hosted Checkout lifecycle: Initiate Checkout (WEBSITE) with the interaction options in §14.1, the Checkout.js component, Retrieve Order, Retrieve Transaction, Capture, Refund, Void and Update Authorization;
 - Retrieve Session;
 - Update Session, **marked experimental**;
 - Check Gateway;
@@ -1126,7 +1214,7 @@ The "Phase" column follows the decision in §14.0.
 | Retrieve Session | `GET /session/{sessionId}` | no | Doc | `retrieveSession(string): SessionDetails` | The response includes `order.id`, `order.amount`, `interaction.operation` and `session.updateStatus`. Useful for confirming what a live session will charge. | 2.0 |
 | Update Session | `PUT /session/{sessionId}` | no | Doc, but the HCO guide says Hosted Session ops are "not needed" for HCO (Q4) | `updateSession(string, SessionUpdate): SessionDetails` | Support for changing amount or order on a live HCO session is unconfirmed. Use `session.version` for optimistic locking. | 2.0, experimental |
 | Create Session (Hosted Session / session authentication) | `POST /session` (no apiOperation) | no | Doc | `createSession(): Session` | Belongs to the Hosted Session (card-fields) integration and to 3DS session authentication. Not needed for HCO. | 2.x |
-| Embedded page / payment page / modal (Checkout.js) | client-side `Checkout.configure({session})`, `showPaymentPage()` / `showEmbeddedPage()` | README snippet only | Doc | Laravel Blade component `<x-mib-global-pay::checkout>`. Core: a `CheckoutJs::scriptUrl($host)` helper. | From v67, `configure()` accepts only `session`; everything else goes in Initiate Checkout. | 2.0 |
+| Embedded page / payment page / modal (Checkout.js) | client-side `Checkout.configure({session})`, `showPaymentPage()` / `showEmbeddedPage()` | README snippet only | Doc | `Core\Checkout\CheckoutJs` for any PHP app, and the Laravel Blade component `<x-mib-global-pay::checkout>` with `mode` (payment, embedded or modal) and callback props. | From v67, `configure()` accepts only `session`; everything else goes in Initiate Checkout, so `GatewayConfig` rejects versions below 67. | 2.0 |
 | Payment plans / instalments on HCO | `constraints.paymentPlans.*` on Initiate Checkout; `Payment Plan: Plan Offers Inquiry` | no | **MIB?** "agree the available payment plans with your acquirer". Unlikely. | `CheckoutRequest::withPaymentPlanConstraints()`, `planOffersInquiry()` | | 2.x |
 | Non-eCommerce source (MOTO, call centre) | `transaction.source` | yes | MIB? (must be on the merchant-acquirer link) | `CheckoutRequest::withTransactionSource(TransactionSource)` | Payer-present options are disabled when the source is not INTERNET. | 2.0 |
 

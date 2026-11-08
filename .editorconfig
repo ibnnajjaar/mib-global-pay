@@ -14,9 +14,6 @@ trim_trailing_whitespace = false
 [*.{yml,yaml}]
 indent_size = 2
 
-[docker-compose.yml]
-indent_size = 4
-
 [*.php]
 ij_php_align_key_value_pairs = true
 ij_any_align_multiline_chained_methods = true

@@ -20,6 +20,7 @@ return [
 
     'api_password' => env('MIB_API_PASSWORD'),
 
+    // 67 or later.
     'api_version' => env('MIB_API_VERSION', 100),
 
     // Seconds, for the default Guzzle client.
@@ -64,17 +65,44 @@ return [
     ],
 
     'double_capture' => [
-        // Void (then refund) a second capture on an already settled payable. Off by default.
-        'auto_reverse' => env('MIB_AUTO_REVERSE_DOUBLE_CAPTURE', false),
+        // Void (then refund) a second capture on an already settled payable. Needs a queue worker.
+        'auto_reverse' => env('MIB_AUTO_REVERSE_DOUBLE_CAPTURE', true),
     ],
 
     'attempts' => [
         'expiry_grace_seconds' => env('MIB_ATTEMPT_GRACE_SECONDS', 300),
+
+        // How long a payment can stay pending or timed out before PaymentNeedsReview asks a person to decide.
+        'review_after_seconds' => env('MIB_REVIEW_AFTER_SECONDS', 86400),
+
+        // How long mib:reconcile keeps checking retired attempts for a late charge.
+        'late_capture_watch_seconds' => env('MIB_LATE_CAPTURE_WATCH_SECONDS', 604800),
     ],
 
     'checkout' => [
         // Sent as interaction.timeout (600-1800).
         'timeout_seconds' => env('MIB_CHECKOUT_TIMEOUT', 1800),
+
+        // Shown to the payer, and used by MibGlobalPay::startCheckout().
+        'merchant_name' => env('MIB_MERCHANT_NAME', env('APP_NAME')),
+        'merchant_url' => env('MIB_MERCHANT_URL', env('APP_URL')),
+        'merchant_logo_url' => env('MIB_MERCHANT_LOGO_URL'),
+
+        // How $attempt->paymentUrl() shows the page: "payment", "embedded" or "modal".
+        'mode' => env('MIB_CHECKOUT_MODE', 'payment'),
+
+        // Where the payer lands afterwards, with ?order=...&status=... Empty shows a simple result page.
+        'completed_url' => env('MIB_CHECKOUT_COMPLETED_URL'),
+
+        // Use the package's attempts table and resolver. Turn it off if you bind your own PayableResolver.
+        'managed_attempts' => env('MIB_MANAGED_ATTEMPTS', true),
+
+        // The pages behind startCheckout(): {prefix}/pay/{order}, {prefix}/return/{order} and {prefix}/link-error.
+        'routes' => [
+            'enabled' => env('MIB_CHECKOUT_ROUTES', true),
+            'prefix' => env('MIB_CHECKOUT_ROUTE_PREFIX', 'mib'),
+            'middleware' => ['web'],
+        ],
     ],
 
     // Local development only.

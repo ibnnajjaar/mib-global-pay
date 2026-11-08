@@ -20,9 +20,9 @@ use IbnNajjaar\MIBGlobalPay\Core\Contracts\OrderIdGenerator;
  */
 final class GatewayOrderId implements OrderIdGenerator
 {
-    public const MAX_LENGTH = 40;
+    public const int MAX_LENGTH = 40;
 
-    private const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    private const string BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
     /**
      * @throws InvalidRequest

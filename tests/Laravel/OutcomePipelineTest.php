@@ -111,10 +111,10 @@ it('maps each verification and payable state to the §6.7 E event', function (Cl
     'not captured, attempt still live → nothing' => [fn () => hostPayable(), orderJson('DECLINED', 'FAILURE', 0), 200, null],
     'not captured, attempt expired → failed' => [fn () => hostPayable(expires: '-5 minutes'), orderJson('DECLINED', 'FAILURE', 0), 200, PaymentFailed::class],
     'not found, attempt expired → failed' => [
-        fn () => hostPayable(expires: '-5 minutes'), [], 404, PaymentFailed::class,
+        fn () => hostPayable(expires: '-5 minutes'), GatewayHarness::errorBody(), 404, PaymentFailed::class,
         fn (PaymentFailed $e) => expect($e->verification->status)->toBe(VerificationStatus::NotFound),
     ],
-    'not found, attempt live → nothing' => [fn () => hostPayable(), [], 404, null],
+    'not found, attempt live → nothing' => [fn () => hostPayable(), GatewayHarness::errorBody(), 404, null],
 ]);
 
 it('reports a failed webhook transaction as PaymentFailed even before expiry', function () {
@@ -128,7 +128,7 @@ it('reports a failed webhook transaction as PaymentFailed even before expiry', f
     Event::assertDispatched(PaymentFailed::class, fn (PaymentFailed $e) => $e->gatewayCode?->value === 'DECLINED');
 });
 
-it('reports unknown orders, and ignores authentication and other notifications', function () {
+it('reports unknown orders, including authorizations, and ignores authentication and other notifications', function () {
     bindResolver();
     Event::fake([UnknownOrderNotification::class]);
 
@@ -140,9 +140,9 @@ it('reports unknown orders, and ignores authentication and other notifications',
     expect(processor()->handleNotification($payment))->toBe(NotificationOutcome::Processed)
         ->and(processor()->handleNotification($auth))->toBe(NotificationOutcome::Ignored)
         ->and(processor()->handleNotification($other))->toBe(NotificationOutcome::Ignored)
-        ->and(processor()->handleNotification($authorization))->toBe(NotificationOutcome::Ignored);
+        ->and(processor()->handleNotification($authorization))->toBe(NotificationOutcome::Processed);
 
-    Event::assertDispatchedTimes(UnknownOrderNotification::class, 1);
+    Event::assertDispatchedTimes(UnknownOrderNotification::class, 2);
 });
 
 it('dispatches RefundProcessed once, then re-verifies the order', function () {

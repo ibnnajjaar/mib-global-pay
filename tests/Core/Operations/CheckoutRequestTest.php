@@ -5,10 +5,13 @@ declare(strict_types=1);
 use IbnNajjaar\MIBGlobalPay\Core\Money\Money;
 use IbnNajjaar\MIBGlobalPay\Core\Money\Currency;
 use IbnNajjaar\MIBGlobalPay\Core\Config\GatewayConfig;
+use IbnNajjaar\MIBGlobalPay\Core\Requests\FieldDisplay;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\CheckoutRequest;
+use IbnNajjaar\MIBGlobalPay\Core\Requests\ShippingDisplay;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\InvalidRequest;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\TransactionSource;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\ThreeDSecureAction;
+use IbnNajjaar\MIBGlobalPay\Core\Requests\PaymentTermsDisplay;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\InteractionOperation;
 use IbnNajjaar\MIBGlobalPay\Core\Requests\CardSecurityCodeDisplay;
 
@@ -174,3 +177,42 @@ it('limits custom fields to 50', function () {
 
     $request->withCustomField('k50', 'v');
 })->throws(InvalidRequest::class, '50');
+
+it('sends a zero amount for VERIFY only', function () {
+    $zero = Money::of('0', Currency::Mvr);
+    $request = CheckoutRequest::forVerification('O-1', $zero, 'M', 'https://x.mv/r')->withoutWebhook();
+    $body = $request->toBody(checkoutConfig());
+
+    expect($body['interaction']['operation'])->toBe('VERIFY')
+        ->and($body['order']['amount'])->toBe('0.00')
+        ->and(fn () => $request->withOperation(InteractionOperation::Purchase)->toBody(checkoutConfig()))->toThrow(InvalidRequest::class, 'greater than zero')
+        ->and(fn () => $request->withOperation(InteractionOperation::Authorize)->toBody(checkoutConfig()))->toThrow(InvalidRequest::class, 'greater than zero');
+});
+
+it('still checks a verification amount', function () {
+    expect(fn () => CheckoutRequest::forVerification('O-1', Money::of('-1', Currency::Mvr), 'M', 'https://x.mv/r'))->toThrow(InvalidRequest::class, 'negative')
+        ->and(fn () => CheckoutRequest::forVerification('O-1', Money::of('0', Currency::Usd), 'M', 'https://x.mv/r')->withoutWebhook()->toBody(checkoutConfig()))->toThrow(InvalidRequest::class, 'allow-list');
+});
+
+it('sets and clears the display controls', function () {
+    $request = minimalCheckout()->withoutWebhook()->withCardSecurityCode(CardSecurityCodeDisplay::Optional)->withDisplayControl(
+        billingAddress: FieldDisplay::Hide,
+        customerEmail: FieldDisplay::ReadOnly,
+        shipping: ShippingDisplay::ReadOnly,
+        paymentTerms: PaymentTermsDisplay::ShowIfSupported,
+    );
+
+    expect($request->toBody(checkoutConfig())['interaction']['displayControl'])->toBe([
+        'cardSecurityCode' => 'OPTIONAL',
+        'billingAddress' => 'HIDE',
+        'customerEmail' => 'READ_ONLY',
+        'shipping' => 'READ_ONLY',
+        'paymentTerms' => 'SHOW_IF_SUPPORTED',
+    ])->and($request->withDisplayControl()->toBody(checkoutConfig())['interaction']['displayControl'])->toBe(['cardSecurityCode' => 'OPTIONAL']);
+});
+
+it('requires an HTTPS logo even when insecure URLs are allowed', function () {
+    $request = minimalCheckout()->withoutWebhook()->withMerchantDetails(logoUrl: 'http://localhost/logo.png');
+
+    expect(fn () => $request->toBody(checkoutConfig(['allow_insecure_urls' => true])))->toThrow(InvalidRequest::class, 'logo URL must use HTTPS');
+});
