@@ -1,9 +1,11 @@
 ---
 id: TASK-14.15
 title: 'QA: pending and timed-out payments, reconcile, review and confirmUnpaid'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08 11:09'
+updated_date: '2026-11-08 13:24'
 labels:
   - qa
 dependencies:
@@ -66,3 +68,13 @@ As listed. Record whether the gateway ever turned the timed-out order into a cap
 - [ ] #4 Whether the gateway treats TIMED_OUT as final is recorded
 - [ ] #5 MIB_REVIEW_AFTER_SECONDS is restored
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Run 2026-11-08 ~18:24 +05:00. Steps 1-4 and 6 (TIMED_OUT card, verification_pending, PaymentNeedsReview after MIB_REVIEW_AFTER_SECONDS) need a card payment; blocked by the gateway's Hosted Checkout outage (TASK-14.5). MIB_REVIEW_AFTER_SECONDS was not changed.
+Step 5 (partial): artisan mib:reconcile with four live, unpaid, unexpired attempts (QA-INV-0003-1, -0004-1, -0005-1, -0007-1): each row 'Verification not_found, Event -'; no events dispatched, states unchanged (still within expires_at).
+Step 7: dashboard confirm_unpaid on live QA-INV-0003-1 (confirmed_by qa-agent, reason QA) -> 'confirmed unpaid'; attempt state failed, confirmed_unpaid_at 2026-11-08 13:24:10 UTC, confirmed_unpaid_by qa-agent, confirmed_unpaid_reason QA. No event recorded for it.
+Step 7 negative: confirm_unpaid on QA-INV-0001-1 (captured, then voided) -> AttemptNotUnpaid 'The gateway reports this attempt as reversed, so it cannot be confirmed unpaid'.
+Step 8 (partial): /qa/invoices/3/pay again -> 302 to /mib/pay/QA-INV-0003-2; a new attempt QA-INV-0003-2 (live) was created. Paying it is blocked by the outage.
+<!-- SECTION:NOTES:END -->
