@@ -4,6 +4,7 @@ title: 'QA: saved cards (Credential on File) and server-side payments'
 status: To Do
 assignee: []
 created_date: '2026-11-08 11:09'
+updated_date: '2026-11-08 14:01'
 labels:
   - qa
 dependencies:
@@ -57,3 +58,9 @@ A token is created and retrievable, a payer-initiated payment with it succeeds, 
 - [ ] #3 The merchant-initiated (agreement) payment result is recorded
 - [ ] #4 A deleted token is refused
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-08 19:01 +05:00: NOT RUN. Every step needs the gateway's Hosted Payment Page, which has shown 'Payment Page - System Error' ('Sorry, but we are unable to complete your payment', a new support code each time, e.g. GPH3YXDZLJGYG for QA-INV-0012-1) for every new session since 18:13 +05:00, including on the gateway's own /checkout/pay/<session> URL. Details in TASK-14.5. Resume when MIB confirms the test gateway's Hosted Checkout works. Server-side token steps (4, 5, 7) also need a token, which only the save-card checkout (step 1) produces. Also note TASK-14.2: the merchant lists only PURCHASE, so the merchant-initiated authorize in step 5 will likely be refused.
+<!-- SECTION:NOTES:END -->
