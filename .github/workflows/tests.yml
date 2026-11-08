@@ -22,7 +22,7 @@ jobs:
             testbench: '11.*'
       fail-fast: false
 
-    # Real servers for tests/Laravel/DatabaseNotificationStoreTest.php; without the env vars it uses SQLite only.
+    # A real MySQL server for tests/Laravel/DatabaseNotificationStoreTest.php; without the env var it uses SQLite only.
     services:
       mysql:
         image: mysql:8.4
@@ -36,22 +36,9 @@ jobs:
           --health-interval=5s
           --health-timeout=5s
           --health-retries=20
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: test
-        ports:
-          - 55432:5432
-        options: >-
-          --health-cmd="pg_isready -U postgres"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=20
 
     env:
       MIB_TEST_MYSQL_DSN: mysql://root:test@127.0.0.1:53306/test
-      MIB_TEST_PGSQL_DSN: pgsql://postgres:test@127.0.0.1:55432/test
 
     steps:
       - name: Checkout code
@@ -61,7 +48,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
-          extensions: mbstring, xml, ctype, json, curl, pdo_mysql, pdo_pgsql, pdo_sqlite
+          extensions: mbstring, xml, ctype, json, curl, pdo_mysql, pdo_sqlite
           coverage: xdebug
 
       - name: Validate composer.json
