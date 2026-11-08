@@ -9,7 +9,6 @@ use IbnNajjaar\MIBGlobalPay\Core\Exceptions\CurrencyMismatch;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\GatewayException;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\MalformedPayload;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\TransportException;
-use IbnNajjaar\MIBGlobalPay\Core\Exceptions\OperationNotEnabled;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\UnsupportedCurrency;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\MalformedNotification;
 use IbnNajjaar\MIBGlobalPay\Core\Exceptions\MibGlobalPayException;
@@ -26,7 +25,6 @@ it('implements the marker interface on the matching SPL exception', function (st
     [UnsupportedCurrency::class, InvalidArgumentException::class],
     [CurrencyMismatch::class, DomainException::class],
     [ConfigurationException::class, DomainException::class],
-    [OperationNotEnabled::class, DomainException::class],
     [SecretMismatch::class, RuntimeException::class],
     [MalformedNotification::class, UnexpectedValueException::class],
     [MalformedPayload::class, UnexpectedValueException::class],

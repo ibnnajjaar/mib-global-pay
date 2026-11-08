@@ -102,7 +102,7 @@ Namespace: `IbnNajjaar\MIBGlobalPay\` is kept, and `Core\` and `Laravel\` become
 7. **Environment presets.** `Test` uses `test-mib.mtf.gateway.mastercard.com`. `Production` has no preset (TODO pending MIB question 14), so `GatewayConfig` throws `ConfigurationException` unless a host is set.
 8. **Exceptions** implement the marker interface `Core\Exceptions\MibGlobalPayException` on SPL subclasses:
    - `InvalidAmount`, `InvalidRequest`, `UnsupportedCurrency` extend `InvalidArgumentException`;
-   - `CurrencyMismatch`, `ConfigurationException`, `OperationNotEnabled` extend `DomainException`;
+   - `CurrencyMismatch`, `ConfigurationException` extend `DomainException`;
    - `SecretMismatch`, `TransportException`, `GatewayException` extend `RuntimeException`;
    - `MalformedNotification`, `MalformedPayload` extend `UnexpectedValueException`.
 9. **`GatewayConfig`:**
@@ -1298,7 +1298,7 @@ Covering everything in §14 without one huge class:
 
   The common operations stay as shortcuts on `MibGateway` (`initiateCheckout`, `retrieveOrder`, `refund`, `void`, `verifyCapture`).
 - **Payload composition.** The request bodies are large: Initiate Checkout alone has hundreds of fields. Shared sub-objects (`Order`, `Interaction`, `Customer`, `Billing`, `Shipping`, `SourceOfFunds`, `Agreement`, `StoredCredential`, `Airline`, …) are separate readonly value objects, reused across operations. `withExtraFields()` remains for anything not modelled yet.
-- **Capabilities.** An optional `Capabilities` config lists the operations MIB has enabled. When it is set, calls to disabled operations throw `OperationNotEnabled` locally instead of getting a gateway rejection. It can be filled from `paymentOptionsInquiry()` where that applies.
+- **Capabilities.** Planned: an optional `Capabilities` config listing the operations MIB has enabled, so calls to disabled operations fail locally instead of getting a gateway rejection. Not built. The unused `OperationNotEnabled` exception was removed (TASK-18, 2026-11-08); the MIB gateway rejects a disabled operation with HTTP 400, `error.field` `interaction.operation`, `validationType` `INVALID`, which surfaces as a `GatewayException`.
 - **Notifications** are a sealed hierarchy built by `NotificationVerifier`: `TransactionNotification` (with an order and transaction), `AuthenticationNotification`, `PaymentAlertNotification` and `UnknownNotification`. Laravel events map onto them.
 - **Laravel layer** binds `MibGateway` plus the sub-clients. The fake implements the same `Gateway` contract and records every `Operation` it receives, so assertions work for every feature.
 

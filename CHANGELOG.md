@@ -9,6 +9,9 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+### Removed
+- `Core\Exceptions\OperationNotEnabled`. Nothing threw it; an operation the merchant has not enabled arrives as a `GatewayException` (HTTP 400, `error.field` `interaction.operation`).
+
 ### Fixed
 - The package now accepts Guzzle 8 (`guzzlehttp/guzzle` `^7.9 || ^8.0`). A fresh Laravel 13 app ships Guzzle 8, so installing the beta there needed `--with-all-dependencies`, which downgraded Guzzle, `guzzlehttp/promises` and `guzzlehttp/psr7` a major version. The install command no longer needs the flag.
 - `CaptureVerifier::isTransactionNotFound()` now accepts the MIB test gateway's unknown-transaction response, HTTP 400 "Unable to find order X and transaction Y for merchant M". It was rejected before, so `ReversalHelper` threw instead of treating an absent void as absent and going on to the refund checks. `isOrderNotFound()` no longer accepts that text, because it names a transaction.
