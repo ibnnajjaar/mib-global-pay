@@ -1,11 +1,11 @@
 ---
 id: TASK-14.4
 title: 'QA: Payment Page purchase with an approved card'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-08 11:09'
-updated_date: '2026-11-08 11:37'
+updated_date: '2026-11-08 12:06'
 labels:
   - qa
 dependencies:
@@ -62,7 +62,7 @@ The main payer flow end to end: `startCheckout()` → signed `/mib/pay/{order}` 
 - [x] #1 The payer reaches the gateway Payment Page showing the merchant name and amount
 - [x] #2 After paying, the return page says the payment was successful
 - [x] #3 The attempt is captured, the invoice is paid, and exactly one PaymentCaptured was recorded
-- [ ] #4 Reloading the return URL and the webhook arriving do not dispatch PaymentCaptured again
+- [x] #4 Reloading the return URL and the webhook arriving do not dispatch PaymentCaptured again
 - [x] #5 A GIF of the flow is saved and named in notes
 <!-- AC:END -->
 
@@ -86,4 +86,20 @@ Run 2026-11-08 (Chrome, invoice INV-0001, order QA-INV-0001-1, Mastercard 512345
 - Step 8: reloading the return URL showed the success text again; still exactly one PaymentCaptured.
 - GIF: qa-14.4-payment-page-approved.gif (browser downloads folder).
 Waiting for the owner to supply the correct webhook secret; the gateway redelivers, so step 7 can be rechecked after the fix.
+
+Step 7 rechecked 2026-11-08 after the owner corrected the secret:
+- mib-global-pay/.env now has the merchant's secret (fingerprint matches what the gateway sends). Copied it into mib-qa/.env without printing, ran optimize:clear and restarted the queue worker.
+- Before the fix, the gateway retried both notifications 5 times (attempts 1-5 at 16:36:33, 16:37:45, 16:39:18, 16:42:21, 16:48:23 +05:00), all 401. Retry gaps grow: about 1.2, 1.5, 3 and 6 minutes.
+- Replayed the gateway's two original requests (same body, headers and secret) through the ngrok inspector at 16:58:18: both HTTP 200.
+- PAYMENT notification (id 465baa3c84..., transaction 1): stored as processed for QA-INV-0001-1; NO second PaymentCaptured (dedupe works); one NotificationReceived.
+- AUTHENTICATION notification (id 31c4ed844a..., transaction trans-60): stored as ignored (correct: 3DS moves no money); one NotificationReceived.
+- No pending or failed jobs; attempt still captured with settled transaction 1.
+- The gateway's own 6th retry had not arrived by 17:06; when it does it should get 200 as a duplicate.
+- Harness fix: qa_events now takes the order ID of notification events from payload order.id.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Payment Page purchase passed end to end on the real MIB test gateway: Pay reused the live attempt, the gateway page showed MIB QA and MVR Rf10.00, 3-D Secure ran by default (ACS emulator, success), the return page said the payment was successful, the attempt was captured and the invoice paid with exactly one PaymentCaptured, a reload added nothing, and the real webhooks (PAYMENT and AUTHENTICATION) were accepted once the correct secret was set, with no second money event. Findings: the first webhook secret was wrong (fixed by the owner); 3DS is on by default; one payment sends two notifications. GIF: qa-14.4-payment-page-approved.gif.
+<!-- SECTION:FINAL_SUMMARY:END -->
