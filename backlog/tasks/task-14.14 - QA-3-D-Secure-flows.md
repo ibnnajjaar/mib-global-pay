@@ -1,9 +1,11 @@
 ---
 id: TASK-14.14
 title: 'QA: 3-D Secure flows'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08 11:09'
+updated_date: '2026-11-08 13:25'
 labels:
   - qa
 dependencies:
@@ -54,3 +56,11 @@ A successful challenge pays, a failed challenge does not, and bypass skips the c
 - [ ] #2 A failed 3DS challenge leads to no capture and no money event
 - [ ] #3 The effect of BYPASS is recorded
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Step 1 (2026-11-08): read the gateway page .../authentication/3DS/test_your_integration.html (JS-rendered; table parsed from the HTML). Picked: Mastercard CHALLENGE 5123450000000008 (also the approved card; TASK-14.4 got the ACS emulator challenge with it) or 2223000000000007; Mastercard FRICTIONLESS 5123456789012346 (transStatus Y, ECI 02); Visa challenge 4440000009900010, Visa frictionless 4440000042200014. Other useful Mastercard rows: Authentication Attempted 5500005555555559 (A), Authentication Rejected 5506900140100503 (R). The 3DS emulator's challenge options: Successful authentication (Y), Failed authentication (N), Cancelled authentication (N, challengeCancel 01), Unable to authenticate (U), Authentication rejected (R). Expiry for these: use the approved expiry 01/39 so the payment itself is approved.
+Already observed in TASK-14.4 (default settings, no three_ds option): a successful 3DS2 challenge with 5123450000000008 led to a captured payment; the gateway sent an AUTHENTICATION notification (trans-60, authenticationStatus AUTHENTICATION_SUCCESSFUL, 3ds2.transactionStatus Y, acsEci 02), which the package classified as AuthenticationNotification and ignored.
+Steps 2-4 (mandatory, failed challenge, bypass) need the payment page; blocked by the gateway's Hosted Checkout outage (TASK-14.5).
+<!-- SECTION:NOTES:END -->
