@@ -11,6 +11,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Fixed
 - The package now accepts Guzzle 8 (`guzzlehttp/guzzle` `^7.9 || ^8.0`). A fresh Laravel 13 app ships Guzzle 8, so installing the beta there needed `--with-all-dependencies`, which downgraded Guzzle, `guzzlehttp/promises` and `guzzlehttp/psr7` a major version. The install command no longer needs the flag.
+- `CaptureVerifier::isTransactionNotFound()` now accepts the MIB test gateway's unknown-transaction response, HTTP 400 "Unable to find order X and transaction Y for merchant M". It was rejected before, so `ReversalHelper` threw instead of treating an absent void as absent and going on to the refund checks. `isOrderNotFound()` no longer accepts that text, because it names a transaction.
 
 ## [2.0.0-beta.1] - 2026-11-08
 This is a beta, not a finished 2.0.0. No authenticated sandbox flow has been run against the gateway, and MIB has not answered our open questions, so some gateway behaviour is still unverified. The list is at the top of [DESIGN-v2.md](https://github.com/ibnnajjaar/mib-global-pay/blob/main/DESIGN-v2.md).
