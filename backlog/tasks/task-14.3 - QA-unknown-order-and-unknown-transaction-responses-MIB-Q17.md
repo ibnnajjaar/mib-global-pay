@@ -1,9 +1,11 @@
 ---
 id: TASK-14.3
 title: 'QA: unknown order and unknown transaction responses (MIB Q17)'
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-11-08 11:09'
+updated_date: '2026-11-08 13:12'
 labels:
   - qa
 dependencies:
@@ -46,8 +48,34 @@ ordinal: 14003
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The HTTP status and JSON body for an unknown order are recorded verbatim in notes
-- [ ] #2 verifyCapture() on an unknown order gives NotFound, or the mismatch is recorded as a finding
-- [ ] #3 The unknown-transaction response is recorded, with whether isTransactionNotFound() accepts it
-- [ ] #4 What Retrieve Order returns for a session that was never paid is recorded
+- [x] #1 The HTTP status and JSON body for an unknown order are recorded verbatim in notes
+- [x] #2 verifyCapture() on an unknown order gives NotFound, or the mismatch is recorded as a finding
+- [x] #3 The unknown-transaction response is recorded, with whether isTransactionNotFound() accepts it
+- [x] #4 What Retrieve Order returns for a session that was never paid is recorded
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Script qa-scripts/14.3-unknown-order.php: Retrieve Order on a never-created ID, verifyCapture on it, Retrieve Transaction with an unknown transaction ID on the paid order QA-INV-0001-1 (and on an unknown order), and Retrieve Order / verifyCapture on the unpaid session order QA-KX3HBO57O6VWY3PN from TASK-14.2.
+2. Print HTTP status, raw body (gateway error bodies hold no secrets), and what CaptureVerifier::isOrderNotFound/isTransactionNotFound say.
+3. Record verbatim; findings where the rule disagrees.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Run 2026-11-08 ~17:45 +05:00, script ~/Herd/mib-qa/qa-scripts/14.3-unknown-order.php (no browser, no GIF). Bodies verbatim:
+1. Retrieve Order QA-NEVER-5634A48D (never created): HTTP 400, body {"error":{"cause":"INVALID_REQUEST","explanation":"Unable to find order QA-NEVER-5634A48D for merchant TESTIUMMPGS"},"result":"ERROR"}. No error.field, no validationType. isOrderNotFound=true. MIB Q17 answered: unknown order = HTTP 400 + 'Unable to find order <id> for merchant <merchant>'.
+2. verifyCapture(QA-NEVER-5634A48D, 10.00 MVR): status not_found (VerificationStatus::NotFound), no exception. As expected.
+3. Retrieve Transaction QA-INV-0001-1 / nope-1 (order exists, transaction does not): HTTP 400, body {"error":{"cause":"INVALID_REQUEST","explanation":"Unable to find order QA-INV-0001-1 and transaction nope-1 for merchant TESTIUMMPGS"},"result":"ERROR"}. isTransactionNotFound=FALSE, isOrderNotFound=true.
+   3b. Same call on an unknown order: identical wording ('Unable to find order QA-NEVER-5634A48D and transaction nope-1 for merchant TESTIUMMPGS'), HTTP 400.
+   FINDING: the gateway's unknown-transaction text starts 'Unable to find order <id> and transaction <id>', which the §4.2 / saysMissing() rule for 'transaction' does not match, so CaptureVerifier::isTransactionNotFound() never accepts the real response. Effect: ReversalHelper::readVoid() rethrows GatewayException instead of treating an absent void as absent, so reverseWithDerivedIds() fails closed (exception, no refund sent) in the case where the void left no transaction. Safe, but that recovery path cannot complete. Also the gateway cannot tell 'order missing' from 'transaction missing' in this message (same wording for both), and isOrderNotFound() matches this transaction message too (harmless today: it is only applied to Retrieve Order errors). Package code not changed; owner to decide.
+4. Retrieve Order QA-KX3HBO57O6VWY3PN (session created in TASK-14.2, never paid): HTTP 400, body {"error":{"cause":"INVALID_REQUEST","explanation":"Unable to find order QA-KX3HBO57O6VWY3PN for merchant TESTIUMMPGS"},"result":"ERROR"}. The gateway does NOT know an order that only had a session. 4b. verifyCapture on it: not_found. So an abandoned attempt reads as NotFound (not as an order with no transactions), which lets AttemptGuard supersede it as designed.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Answered MIB Q17 against the test gateway (qa-scripts/14.3-unknown-order.php): an unknown order is HTTP 400 INVALID_REQUEST 'Unable to find order <id> for merchant <m>', which isOrderNotFound() accepts, so verifyCapture() returns NotFound; an order with only an unpaid session is unknown to the gateway and also NotFound. Finding: an unknown transaction returns 'Unable to find order <id> and transaction <id> ...' (HTTP 400), which isTransactionNotFound() rejects, so ReversalHelper's absent-void path fails closed with a GatewayException.
+<!-- SECTION:FINAL_SUMMARY:END -->
