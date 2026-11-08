@@ -1,9 +1,11 @@
 ---
 id: TASK-14.5
 title: 'QA: declined, expired and failed card payments, and retrying'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08 11:09'
+updated_date: '2026-11-08 13:16'
 labels:
   - qa
 dependencies:
@@ -58,3 +60,9 @@ Failure handling on the Hosted Payment Page and in the package: the payer is tol
 - [ ] #2 A successful retry on the same Payment Page captures exactly once
 - [ ] #3 After a declined payment, the payer can start paying again, and what happens to the old attempt is recorded
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-08 18:13-18:25 +05:00 BLOCKED by the test gateway: every new Hosted Checkout session fails before the card form. Our page and the gateway's own page https://test-mib.mtf.gateway.mastercard.com/checkout/pay/<session> (tab title 'Payment Page - System Error') show 'Sorry, but we are unable to complete your payment. Please try again by refreshing the page. If the problem persists please contact your service provider.' with support codes DZLVFRPTCEJDF, 2UN2BBH264QDE, LTFYXHC4O5SZF, WSW76BJDYRXWH (embedded mode), MWI4FAWJZZAHG and YFJUFTGEWP7CG (a minimal session from qa-scripts/minimal-session.php, no notificationUrl). Sessions are valid via the API (retrieveSession: updateStatus SUCCESS, amount 10.00 MVR). Console: 'ReferenceError: dialog is not defined' from checkout.min.js (Last-Modified 2026-10-29, unchanged). The same flow worked at 16:30 for QA-INV-0001-1, so this is a gateway-side fault, not the package. Attempts QA-INV-0003-1 and QA-INV-0004-1 are live and unpaid. Will retry later.
+<!-- SECTION:NOTES:END -->

@@ -1,9 +1,11 @@
 ---
 id: TASK-14.7
 title: 'QA: Checkout.js load errors and payer-facing error messages'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-11-08 11:09'
+updated_date: '2026-11-08 13:17'
 labels:
   - qa
 dependencies:
@@ -54,8 +56,20 @@ When Checkout.js fails to load or reports an error, the component replaces its t
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 An invalid session and an unreachable Checkout.js both show the payer-facing error message
-- [ ] #2 A tampered signed payment link is refused with 403
-- [ ] #3 Opening the payment page of a finished attempt redirects to its result instead of a new payment
-- [ ] #4 An unknown order on the return route answers 404
-- [ ] #5 MIB_CHECKOUT_JS_URL is restored afterwards
+- [x] #2 A tampered signed payment link is refused with 403
+- [x] #3 Opening the payment page of a finished attempt redirects to its result instead of a new payment
+- [x] #4 An unknown order on the return route answers 404
+- [x] #5 MIB_CHECKOUT_JS_URL is restored afterwards
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Run 2026-11-08 ~18:16-18:20 +05:00 (during the test gateway's Hosted Checkout outage, see TASK-14.5 notes).
+1. Made-up session: {APP}/qa/attempts/QA-INV-0004-1/show?mode=embedded&session=SESSION0002000000000X0000000X00. The gateway's own box appears ('Sorry, but we are unable to complete your payment ... Support code: 4RVX34GOVAPZH'); the package text stays 'Loading the payment form…' and is NOT replaced; console shows only the gateway's 'ReferenceError: dialog is not defined', and the package's data-error callback (mibGlobalPayError) is never called. FINDING (provisional): when the gateway rejects the session it renders its own error and does not call Checkout.js's error callback, so the package's fallback text does not appear. Confounded by the outage (valid sessions currently behave the same way); re-check once the gateway is healthy.
+2. MIB_CHECKOUT_JS_URL set to https://test-mib.mtf.gateway.mastercard.com/static/checkout/missing.js (HTTP 404), config cleared, INV-0005 -> /mib/pay/QA-INV-0005-1: page text 'The payment page could not be loaded. Please try again.', console error 'MIB Checkout error checkout.min.js did not load'. No stack trace, no blank page. As expected.
+3. /mib/pay/QA-INV-0004-1 with the last character of signature changed: HTTP 403. The unchanged link: 200. As expected.
+4. Captured attempt QA-INV-0001-1: a fresh signed link (URL::temporarySignedRoute, 10 min) gives 302 -> /mib/return/QA-INV-0001-1, which shows 'Thank you. Your payment was successful.' As expected. FINDING (minor UX): the dashboard's $attempt->paymentUrl() is signed until the attempt's expires_at (12:04:26 UTC here), so a payer reopening that old link after expiry gets a bare 403 'Invalid signature' instead of the result page.
+5. /mib/return/QA-DOES-NOT-EXIST-1: HTTP 404. As expected.
+MIB_CHECKOUT_JS_URL restored from a backup copy of .env (backup deleted), config cleared, and the config value checked to point at checkout.min.js again. Kept In Progress only to re-check step 1 when the gateway's Hosted Checkout works again.
+<!-- SECTION:NOTES:END -->
